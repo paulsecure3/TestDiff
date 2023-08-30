@@ -5,11 +5,9 @@ import "./IPool.sol";
 
 interface IActivePool is IPool {
 	// --- Events ---
-	event BorrowerOperationsAddressChanged(
-		address _newBorrowerOperationsAddress
-	);
+	event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
 	event TroveManagerAddressChanged(address _newTroveManagerAddress);
-	event ActivePoolVSTDebtUpdated(address _asset, uint256 _VSTDebt);
+	event ActivePoolUSDADebtUpdated(address _asset, uint256 _USDADebt);
 	event ActivePoolAssetBalanceUpdated(address _asset, uint256 _balance);
 
 	// --- Functions ---
@@ -18,4 +16,19 @@ interface IActivePool is IPool {
 		address _account,
 		uint256 _amount
 	) external;
+
+	function stake(
+		address _asset,
+		address _behalfOf,
+		uint256 _amount
+	) external;
+
+	function unstake(
+		address _asset,
+		address _account,
+		uint256 _amount
+	) external;
+
+	function decreaseUSDADebt(address _asset, uint256 _amount) external;
+
 }

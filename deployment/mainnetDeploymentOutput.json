@@ -1,0 +1,152 @@
+{
+    "sortedTroves": {
+        "address": "0xf2d99238A75212aDc15ab9264A2E94af8143d00E",
+        "txHash": "0x96e71d8886b38c3f95ed91bb96c9f530071095974e29f93995686a2fb7baca24"
+    },
+    "troveManager": {
+        "address": "0x0245A1D6787117929C4fAE0967a361C52D7C7afE",
+        "txHash": "0xee3ec56cef3a42574249026a19fcfa820c85fe7fda322b3a39ec3fd1fbba5594"
+    },
+    "activePool": {
+        "address": "0xeDc9cc73D37a0Bd150b5d921ec65F776C379c229",
+        "txHash": "0xc6940f2ccceb7a21edd1d4dfb3a4166dd890ad83017cdad86e6918589084e87f"
+    },
+    "stabilityPoolManager": {
+        "address": "0xDE18151706568d07c6D9e83B78cf533aD4b09C2B",
+        "txHash": "0x34dfe557289b9df40f0bb803de5e9c70bdaec0e3981e18f0c29aa6affed2ac32"
+    },
+    "defaultPool": {
+        "address": "0x18589267bbB00607675E1Fb69F81f6CDBF3BE5f9",
+        "txHash": "0x9599c491b5742f7c9df84cdc02dc28095d57ad95bd19fa81a67aa15e1d5b9e7d"
+    },
+    "collSurplusPool": {
+        "address": "0x9A1afEc6Eb1fDdb606D2a68e221D32978255a0bf",
+        "txHash": "0x3257b3a25105b21111a924d52e8560d5ade912b0d57ca9f6af5c8b8db7621d10"
+    },
+    "borrowerOperations": {
+        "address": "0x5aAA07D2B807670F94DBbB3E001cBEBB4Dc32Ae8",
+        "txHash": "0x32a59673551a94f0a38da36f957b030b6cc6b61b128db196d8767c40577209f8"
+    },
+    "hintHelpers": {
+        "address": "0xDD30485490D82E1442f47d3194e5907177e36f1e",
+        "txHash": "0x18a50eed29a1b85a8032b404ccb7f8eb81b1de6feb4fccb1fcfe1a76a9091b4d"
+    },
+    "agilelyParameters": {
+        "address": "0xdD9eb2F4bc95259D40125678070E0d9F899e6C44",
+        "txHash": "0xc8f089437db7267339db9a09db81dc8981d60c0c811f62161062a21798a888d7"
+    },
+    "glpStaking": {
+        "address": "0xEa0B0c81Fb4Ad0b01952D2e070D6341d2B1f956c",
+        "txHash": "0x68ecee70c57f0bf101f82d8c32023f7b3f411b563439c0efdb6349a0a4d3e3e1"
+    },
+    "stabilityPoolV1": {
+        "address": "0x58Ba897a0D97Cf372F6389752198BC762e5B7902",
+        "txHash": "0x11b66e40f1a5064e72982664249923a6f825f01626a85cebebb61124c264808a"
+    },
+    "agilelyStabilityPool": {
+        "address": "0x0eF91574b9A5F672e207E1cAD5359d301A8172eb",
+        "txHash": "0xdeca7a858dcd6ef467d88c2b57a6a055ddd65c8b10c6de69cabda1e78e8eb380"
+    },
+    "gasPool": {
+        "address": "0x073f9f2C8187dB8E41c0b5EeA4B492038e1ec2D8",
+        "txHash": "0x44da93260e6b34cfa3d3b7f09cbd7f3110ceb41bc272b57b625560955d8e0bb5"
+    },
+    "lockedAgl": {
+        "address": "0x86d4Df6Db19fB39E2F09A050f001b95418944048",
+        "txHash": "0x3974ee79ceb30cd34f31df98a0a24ab465e0093aa5cd2525414024c6d91634de"
+    },
+    "adminContract": {
+        "address": "0xA45158aeE48C051d55Cd1af32172dDb2d29E9177",
+        "txHash": "0xf9c53d19730578138da882329898dd47b5868b1f225f44efc9a2ba5802a895d4"
+    },
+    "USDAToken": {
+        "address": "0x9cdC271Cdb06aDf12e40160a726F42e2599fB3b3",
+        "txHash": "0xbab7168b11ce16ce4b847d41fc307697ae7d8d6298581aad86dd5035538d2e36"
+    },
+    "usdaScript": {
+        "address": "0x68Fa35c9B495F4D1a554a033672bA21e4B084437",
+        "txHash": "0x179e7138f36cec9db452d5a114a42a05f26f4ca2235e16395ab4dd8d629040c4"
+    },
+    "oracleVerificationV1": {
+        "address": "0xF2539cA6b8Eb815849D1fF62C6db2489cdB36173",
+        "txHash": "0xd16f73a0bfeb9139f64d9009fef607e0443e6704702513b8d58c72c28ed2bba7"
+    },
+    "priceFeed": {
+        "address": "0x857aea9f9c62aD41c17ECbe3dED95bf868e6ff46",
+        "txHash": "0xb28a4ef5e1882ff8666d10cd2cc6383f529888791c464fa20d0ddd2f0941a0e9"
+    },
+    "chainlinkOracle": {
+        "address": "0xFfB97B3B2917570a1e3e08c9FB5C7a34EA53e4cA",
+        "txHash": "0x739875eff485feabd5c31e017c0bcc9859423555d4b831a4a9b415bb8c835cd7"
+    },
+    "customOracle": {
+        "address": "0x48b1aA4A79C2cbd03856D50E72aaC479341Bb5c6",
+        "txHash": "0x418b82ded184e11095c3ef97cce3bde09297a75a3044bd7fd7c0ba4dc85b9bd5"
+    },
+    "usdaOracle": {
+        "address": "0xD5364f26e9A2118687B21b3D6A2b0799F1330AAB",
+        "txHash": "0xa6aeb233480c737290d5f1f7f0b6c85fa171f6aa2ccb7e1ca2919c8ecec71181"
+    },
+    "glpOracle": {
+        "address": "0x0DF46582df068ff72673f0b7aA0446bEa3A80325",
+        "txHash": "0x5f643c2ba4ee725a1e518e8752f3ff3edcb8b10fdab8a63d453510ff9676c680"
+    },
+    "glpOracleV1": {
+        "address": "0x76895D4BdE85682cc6168bc2faa4d6b8E90F31f8",
+        "txHash": "0x1ab2ad9553740296b16125eec1b3edadc00d8eea70844daeb9354d6a18c5c3a8"
+    },
+    "AGLStaking": {
+        "address": "0x53B44C822e9C6BEb59587056A4acf269e9196861",
+        "txHash": "0xb801b27fd2a8a50eecab7ae6a6a916d61ffbd0d23c69b8a38ee8012b22add589"
+    },
+    "communityIssuance": {
+        "address": "0x67d60a096A2Aa813dCBE7eb8884842661224bF38",
+        "txHash": "0xbc4d0056505549de43f3b127a9ea1bafad324be166de10a8fdbc1fdadb93b252"
+    },
+    "AGLToken": {
+        "address": "0xb382f9Da44a803200ECccAF87697e77A33C9E7C1",
+        "txHash": "0x8e9edf71f3e012143b5cf6d585615cc7c618c03a2b45eb1029a7f84ac5236899"
+    },
+    "ProxyStabilityPoolETH": {
+        "address": "0x0271B0237042F630B501Db02af7F52b820C669eD",
+        "txHash": "0x2c38cd4ceb4bf0d588a78b3f194898c4eb3f46c12222ec025b5d273f450a1447"
+    },
+    "ProxyStabilityPoolSGLP": {
+        "address": "0x1077b06C23bAF85F0068d5C9ea0B6aD72283a8F8",
+        "txHash": "0x857f10ca76ea9ada8ba7a914f8eda3a282fe9ad5287dcb29f9835de970e6db53"
+    },
+    "emergencyReserve": {
+        "address": "0x01ADE79664d4714F2601A45E8554D2b56590ABB7",
+        "txHash": "0xd49607e5c1ecac0cae8bf8298d660686197d821d60952f42e3f26faf3994f2b1"
+    },
+    "savingModuleStabilityPool": {
+        "address": "0xDb01094889369a5D207f92A9400E57215Ff084b8",
+        "txHash": "0xe605853325076b37f311d56311608984f340055ef6177680c7066cd9802b7db1"
+    },
+    "savingModule": {
+        "address": "0x5f1cA8398A425e05fD5952570A3Ca7D3E7eA3490",
+        "txHash": "0xb6509aa5eacf871d6149239e516cc03a05151a00e5053509616dcf79370e8ee8"
+    },
+    "agilelyInterestManager": {
+        "address": "0xE7C32B950B1910bcA696914f98a223197E1B2532",
+        "txHash": "0x10031d18cc5ee3629c8a417060f6c6d56f0cebc5ee99943325184453387ae509"
+    },
+    "Module ETH": {
+        "address": "0x2a18b19E10fd36181E9F317fA3af5112C6F4ca3c",
+        "txHash": "0x25dade48af980da6db09f75acd665e2d5cecdf59f208c8308f0a99f4a2a44912",
+        "verification": "undefined/0x2a18b19E10fd36181E9F317fA3af5112C6F4ca3c#code"
+    },
+    "Module GLP": {
+        "address": "0x889aB5996792C2A4d82CC6b07426B28aC94c37e0",
+        "txHash": "0x882a1a8466854eae287280a4fd8e569d99848a7de11e14d2fbaa3c47324f1a26",
+        "verification": "undefined/0x889aB5996792C2A4d82CC6b07426B28aC94c37e0#code"
+    },
+    "uniswapV3Trader": {
+        "address": "0xd972dCA047609C7C14990b603AA810c1e0F8eC13",
+        "txHash": "0x5f6b41b7a0a53419da4a616d730e4a0d576a002442ad19190c525476c31e5c42"
+    },
+    "dexTrader": {
+        "address": "0x59AA1BD25994d363C4749948E40ecAC8ABd7cb92",
+        "txHash": "0x7fc57d192aaa10a4b490a5a2b8aa24a6a0f5da4f0add434e6f7f798ba889b55e"
+    }
+}

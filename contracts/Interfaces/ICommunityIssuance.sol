@@ -5,31 +5,37 @@ pragma solidity ^0.8.10;
 interface ICommunityIssuance {
 	// --- Events ---
 
-	event VSTATokenAddressSet(address _VSTATokenAddress);
+	event AGLTokenAddressSet(address _AGLTokenAddress);
 	event StabilityPoolAddressSet(address _stabilityPoolAddress);
-	event TotalVSTAIssuedUpdated(
-		address indexed stabilityPool,
-		uint256 _totalVSTAIssued
-	);
+	event TotalAGLIssuedUpdated(address indexed stabilityPool, uint256 _totalAGLIssued);
+
+	struct DistributionRewards {
+		address rewardToken;
+		uint256 totalRewardIssued;
+		uint256 lastUpdateTime;
+		uint256 totalRewardSupply;
+		uint256 rewardDistributionPerMin;
+	}
 
 	// --- Functions ---
 
 	function setAddresses(
-		address _VSTATokenAddress,
+		address _AGLTokenAddress,
 		address _stabilityPoolAddress,
-		address _treasurySig
+		address _adminContract
 	) external;
 
-	function issueVSTA() external returns (uint256);
+	function issueAGL() external returns (uint256);
 
-	function sendVSTA(address _account, uint256 _VSTAamount) external;
+	function sendAGL(address _account, uint256 _aglAmount) external;
 
-	function addFundToStabilityPool(address _pool, uint256 _assignedSupply)
-		external;
+	function addFundToStabilityPool(address _pool, uint256 _assignedSupply) external;
 
-	function transferFunToAnotherStabilityPool(
-		address _target,
-		address _receiver,
-		uint256 _quantity
+	function addFundToStabilityPoolFrom(
+		address _pool,
+		uint256 _assignedSupply,
+		address _spender
 	) external;
+
+	function setWeeklyAglDistribution(address _stabilityPool, uint256 _weeklyReward) external;
 }

@@ -7,14 +7,12 @@ import "./IDeposit.sol";
 interface ICollSurplusPool is IDeposit {
 	// --- Events ---
 
-	event BorrowerOperationsAddressChanged(
-		address _newBorrowerOperationsAddress
-	);
+	event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
 	event TroveManagerAddressChanged(address _newTroveManagerAddress);
 	event ActivePoolAddressChanged(address _newActivePoolAddress);
 
 	event CollBalanceUpdated(address indexed _account, uint256 _newBalance);
-	event EtherSent(address _to, uint256 _amount);
+	event AssetSent(address _to, uint256 _amount);
 
 	// --- Contract setters ---
 
@@ -26,10 +24,7 @@ interface ICollSurplusPool is IDeposit {
 
 	function getAssetBalance(address _asset) external view returns (uint256);
 
-	function getCollateral(address _asset, address _account)
-		external
-		view
-		returns (uint256);
+	function getCollateral(address _asset, address _account) external view returns (uint256);
 
 	function accountSurplus(
 		address _asset,

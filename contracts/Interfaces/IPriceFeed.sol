@@ -12,39 +12,37 @@ interface IPriceFeed {
 		uint8 decimals;
 	}
 
-	struct TellorResponse {
-		bool ifRetrieve;
-		uint256 value;
-		uint256 timestamp;
-		bool success;
-	}
-
 	struct RegisterOracle {
 		AggregatorV3Interface chainLinkOracle;
-		uint256 tellorId;
+		AggregatorV3Interface chainLinkIndex;
 		bool isRegistered;
 	}
 
 	enum Status {
 		chainlinkWorking,
-		usingTellorChainlinkUntrusted,
-		bothOraclesUntrusted,
-		usingTellorChainlinkFrozen,
-		usingChainlinkTellorUntrusted
+		chainlinkUntrusted
 	}
 
 	// --- Events ---
 	event PriceFeedStatusChanged(Status newStatus);
-	event LastGoodPriceUpdated(
-		address indexed token,
-		uint256 _lastGoodPrice
-	);
+	event LastGoodPriceUpdated(address indexed token, uint256 _lastGoodPrice);
+	event LastGoodIndexUpdated(address indexed token, uint256 _lastGoodIndex);
 	event RegisteredNewOracle(
-		address indexed token,
-		address indexed chainLinkAggregator,
-		uint256 indexed tellorId
+		address token,
+		address chainLinkAggregator,
+		address chianLinkIndex
 	);
 
 	// --- Function ---
+	function addOracle(
+		address _token,
+		address _chainlinkOracle,
+		address _chainlinkIndexOracle
+	) external;
+
+	function getExternalPrice(address _token) external view returns (uint256);
+
+
 	function fetchPrice(address _token) external returns (uint256);
 }
+

@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.10;
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "../Dependencies/LiquityMath.sol";
+import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
+import "../Dependencies/AGLMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../Interfaces/IBorrowerOperations.sol";
 import "../Interfaces/ITroveManager.sol";
 import "../Interfaces/IStabilityPoolManager.sol";
 import "../Interfaces/IPriceFeed.sol";
-import "../Interfaces/IVSTAStaking.sol";
+import "../Interfaces/IAGLStaking.sol";
 import "./BorrowerOperationsScript.sol";
 import "./ETHTransferScript.sol";
-import "./VSTAStakingScript.sol";
+import "./AGLStakingScript.sol";
 
 contract BorrowerWrappersScript is
 	BorrowerOperationsScript,
 	ETHTransferScript,
-	VSTAStakingScript
+	AGLStakingScript
 {
-	using SafeMath for uint256;
+	using SafeMathUpgradeable for uint256;
 
 	struct Local_var {
 		address _asset;
 		uint256 _maxFee;
 		address _upperHint;
 		address _lowerHint;
-		uint256 netVSTAmount;
+		uint256 netAGLmount;
 	}
 
 	string public constant NAME = "BorrowerWrappersScript";
@@ -33,55 +33,48 @@ contract BorrowerWrappersScript is
 	ITroveManager immutable troveManager;
 	IStabilityPoolManager immutable stabilityPoolManager;
 	IPriceFeed immutable priceFeed;
-	IERC20 immutable vstToken;
-	IERC20 immutable vstaToken;
+	IERC20 immutable usdaToken;
+	IERC20 immutable aglToken;
 
 	constructor(
 		address _borrowerOperationsAddress,
 		address _troveManagerAddress,
-		address _VSTAStakingAddress
+		address _AGLStakingAddress
 	)
-		BorrowerOperationsScript(
-			IBorrowerOperations(_borrowerOperationsAddress)
-		)
-		VSTAStakingScript(_VSTAStakingAddress)
+		BorrowerOperationsScript(IBorrowerOperations(_borrowerOperationsAddress))
+		AGLStakingScript(_AGLStakingAddress)
 	{
 		checkContract(_troveManagerAddress);
 		ITroveManager troveManagerCached = ITroveManager(_troveManagerAddress);
 		troveManager = troveManagerCached;
 
-		IStabilityPoolManager stabilityPoolCached = troveManagerCached
-			.stabilityPoolManager();
+		IStabilityPoolManager stabilityPoolCached = troveManagerCached.stabilityPoolManager();
 		checkContract(address(stabilityPoolCached));
 		stabilityPoolManager = stabilityPoolCached;
 
-		IPriceFeed priceFeedCached = troveManagerCached
-			.vestaParams()
-			.priceFeed();
+		IPriceFeed priceFeedCached = troveManagerCached.aglParams().priceFeed();
 		checkContract(address(priceFeedCached));
 		priceFeed = priceFeedCached;
 
-		address vstTokenCached = address(troveManagerCached.vstToken());
-		checkContract(vstTokenCached);
-		vstToken = IERC20(vstTokenCached);
+		address usdaTokenCached = address(troveManagerCached.usdaToken());
+		checkContract(usdaTokenCached);
+		usdaToken = IERC20(usdaTokenCached);
 
-		address vstaTokenCached = address(
-			IVSTAStaking(_VSTAStakingAddress).vstaToken()
-		);
-		checkContract(vstaTokenCached);
-		vstaToken = IERC20(vstaTokenCached);
+		address aglTokenCached = address(IAGLStaking(_AGLStakingAddress).aglToken());
+		checkContract(aglTokenCached);
+		aglToken = IERC20(aglTokenCached);
 
-		IVSTAStaking vstaStakingCached = troveManagerCached.vstaStaking();
+		IAGLStaking aglStakingCached = troveManagerCached.aglStaking();
 		require(
-			_VSTAStakingAddress == address(vstaStakingCached),
-			"BorrowerWrappersScript: Wrong VSTAStaking address"
+			_AGLStakingAddress == address(aglStakingCached),
+			"BorrowerWrappersScript: Wrong AGLStaking address"
 		);
 	}
 
 	function claimCollateralAndOpenTrove(
 		address _asset,
 		uint256 _maxFee,
-		uint256 _VSTAmount,
+		uint256 _AGLmount,
 		address _upperHint,
 		address _lowerHint
 	) external payable {
@@ -95,18 +88,14 @@ contract BorrowerWrappersScript is
 		// already checked in CollSurplusPool
 		assert(balanceAfter > balanceBefore);
 
-		uint256 totalCollateral = balanceAfter.sub(balanceBefore).add(
-			msg.value
-		);
+		uint256 totalCollateral = balanceAfter.sub(balanceBefore).add(msg.value);
 
 		// Open trove with obtained collateral, plus collateral sent by user
-		borrowerOperations.openTrove{
-			value: _asset == address(0) ? totalCollateral : 0
-		}(
+		borrowerOperations.openTrove{ value: _asset == address(0) ? totalCollateral : 0 }(
 			_asset,
 			totalCollateral,
 			_maxFee,
-			_VSTAmount,
+			_AGLmount,
 			_upperHint,
 			_lowerHint
 		);
@@ -118,29 +107,21 @@ contract BorrowerWrappersScript is
 		address _upperHint,
 		address _lowerHint
 	) external {
-		Local_var memory vars = Local_var(
-			_asset,
-			_maxFee,
-			_upperHint,
-			_lowerHint,
-			0
-		);
+		Local_var memory vars = Local_var(_asset, _maxFee, _upperHint, _lowerHint, 0);
 		uint256 collBalanceBefore = address(this).balance;
-		uint256 VSTABalanceBefore = vstaToken.balanceOf(address(this));
+		uint256 AGLBalanceBefore = aglToken.balanceOf(address(this));
 
 		// Claim rewards
-		stabilityPoolManager.getAssetStabilityPool(vars._asset).withdrawFromSP(
-				0
-			);
+		stabilityPoolManager.getAssetStabilityPool(vars._asset).withdrawFromSP(0);
 
 		uint256 collBalanceAfter = address(this).balance;
-		uint256 VSTABalanceAfter = vstaToken.balanceOf(address(this));
+		uint256 AGLBalanceAfter = aglToken.balanceOf(address(this));
 		uint256 claimedCollateral = collBalanceAfter.sub(collBalanceBefore);
 
-		// Add claimed ETH to trove, get more VST and stake it into the Stability Pool
+		// Add claimed ETH to trove, get more USDA and stake it into the Stability Pool
 		if (claimedCollateral > 0) {
 			_requireUserHasTrove(vars._asset, address(this));
-			vars.netVSTAmount = _getNetVSTAmount(vars._asset, claimedCollateral);
+			vars.netAGLmount = _getNetAGLmount(vars._asset, claimedCollateral);
 			borrowerOperations.adjustTrove{
 				value: vars._asset == address(0) ? claimedCollateral : 0
 			}(
@@ -148,23 +129,21 @@ contract BorrowerWrappersScript is
 				claimedCollateral,
 				vars._maxFee,
 				0,
-				vars.netVSTAmount,
+				vars.netAGLmount,
 				true,
 				vars._upperHint,
 				vars._lowerHint
 			);
-			// Provide withdrawn VST to Stability Pool
-			if (vars.netVSTAmount > 0) {
-				stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(
-					vars.netVSTAmount
-				);
+			// Provide withdrawn USDA to Stability Pool
+			if (vars.netAGLmount > 0) {
+				stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(vars.netAGLmount);
 			}
 		}
 
-		// Stake claimed VSTA
-		uint256 claimedVSTA = VSTABalanceAfter.sub(VSTABalanceBefore);
-		if (claimedVSTA > 0) {
-			vstaStaking.stake(claimedVSTA);
+		// Stake claimed AGL
+		uint256 claimedAGL = AGLBalanceAfter.sub(AGLBalanceBefore);
+		if (claimedAGL > 0) {
+			aglStaking.stake(claimedAGL);
 		}
 	}
 
@@ -174,32 +153,22 @@ contract BorrowerWrappersScript is
 		address _upperHint,
 		address _lowerHint
 	) external {
-		Local_var memory vars = Local_var(
-			_asset,
-			_maxFee,
-			_upperHint,
-			_lowerHint,
-			0
-		);
+		Local_var memory vars = Local_var(_asset, _maxFee, _upperHint, _lowerHint, 0);
 
 		uint256 collBalanceBefore = address(this).balance;
-		uint256 VSTBalanceBefore = vstToken.balanceOf(address(this));
-		uint256 VSTABalanceBefore = vstaToken.balanceOf(address(this));
+		uint256 USDABalanceBefore = usdaToken.balanceOf(address(this));
+		uint256 AGLBalanceBefore = aglToken.balanceOf(address(this));
 
 		// Claim gains
-		vstaStaking.unstake(0);
+		aglStaking.unstake(0);
 
-		uint256 gainedCollateral = address(this).balance.sub(
-			collBalanceBefore
-		); // stack too deep issues :'(
-		uint256 gainedVST = vstToken.balanceOf(address(this)).sub(
-			VSTBalanceBefore
-		);
+		uint256 gainedCollateral = address(this).balance.sub(collBalanceBefore); // stack too deep issues :'(
+		uint256 gainedUSDA = usdaToken.balanceOf(address(this)).sub(USDABalanceBefore);
 
-		// Top up trove and get more VST, keeping ICR constant
+		// Top up trove and get more USDA, keeping ICR constant
 		if (gainedCollateral > 0) {
 			_requireUserHasTrove(vars._asset, address(this));
-			vars.netVSTAmount = _getNetVSTAmount(vars._asset, gainedCollateral);
+			vars.netAGLmount = _getNetAGLmount(vars._asset, gainedCollateral);
 			borrowerOperations.adjustTrove{
 				value: vars._asset == address(0) ? gainedCollateral : 0
 			}(
@@ -207,48 +176,40 @@ contract BorrowerWrappersScript is
 				gainedCollateral,
 				vars._maxFee,
 				0,
-				vars.netVSTAmount,
+				vars.netAGLmount,
 				true,
 				vars._upperHint,
 				vars._lowerHint
 			);
 		}
 
-		uint256 totalVST = gainedVST.add(vars.netVSTAmount);
-		if (totalVST > 0) {
-			stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(
-				totalVST
-			);
+		uint256 totalUSDA = gainedUSDA.add(vars.netAGLmount);
+		if (totalUSDA > 0) {
+			stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(totalUSDA);
 
-			// Providing to Stability Pool also triggers VSTA claim, so stake it if any
-			uint256 VSTABalanceAfter = vstaToken.balanceOf(address(this));
-			uint256 claimedVSTA = VSTABalanceAfter.sub(VSTABalanceBefore);
-			if (claimedVSTA > 0) {
-				vstaStaking.stake(claimedVSTA);
+			// Providing to Stability Pool also triggers AGL claim, so stake it if any
+			uint256 AGLBalanceAfter = aglToken.balanceOf(address(this));
+			uint256 claimedAGL = AGLBalanceAfter.sub(AGLBalanceBefore);
+			if (claimedAGL > 0) {
+				aglStaking.stake(claimedAGL);
 			}
 		}
 	}
 
-	function _getNetVSTAmount(address _asset, uint256 _collateral)
-		internal
-		returns (uint256)
-	{
+	function _getNetAGLmount(address _asset, uint256 _collateral) internal returns (uint256) {
 		uint256 price = priceFeed.fetchPrice(_asset);
 		uint256 ICR = troveManager.getCurrentICR(_asset, address(this), price);
 
-		uint256 VSTAmount = _collateral.mul(price).div(ICR);
+		uint256 AGLmount = _collateral.mul(price).div(ICR);
 		uint256 borrowingRate = troveManager.getBorrowingRateWithDecay(_asset);
-		uint256 netDebt = VSTAmount.mul(LiquityMath.DECIMAL_PRECISION).div(
-			LiquityMath.DECIMAL_PRECISION.add(borrowingRate)
+		uint256 netDebt = AGLmount.mul(AGLMath.DECIMAL_PRECISION).div(
+			AGLMath.DECIMAL_PRECISION.add(borrowingRate)
 		);
 
 		return netDebt;
 	}
 
-	function _requireUserHasTrove(address _asset, address _depositor)
-		internal
-		view
-	{
+	function _requireUserHasTrove(address _asset, address _depositor) internal view {
 		require(
 			troveManager.getTroveStatus(_asset, _depositor) == 1,
 			"BorrowerWrappersScript: caller must have an active trove"

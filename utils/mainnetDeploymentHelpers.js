@@ -1,7 +1,11 @@
-const fs = require('fs')
+import {CommunityIssuance} from "../typechain-types";
 
-const ZERO_ADDRESS = '0x' + '0'.repeat(40)
-const maxBytes32 = '0x' + 'f'.repeat(64)
+const fs = require('fs')
+const { ethers, upgrades, network } = require("hardhat");
+const LZ_ENDPOINTS = require("../constants/layerzeroEndpoints.json")
+const configParams = require("../deployment/arbitrum.deployment.js")
+const { constants } = require("ethers")
+
 
 class MainnetDeploymentHelper {
   constructor(configParams, deployerWallet) {
@@ -23,7 +27,6 @@ class MainnetDeploymentHelper {
   saveDeployment(deploymentState) {
     const deploymentStateJSON = JSON.stringify(deploymentState, null, 2)
     fs.writeFileSync(this.configParams.OUTPUT_FILE, deploymentStateJSON)
-
   }
   // --- Deployer methods ---
 
@@ -32,25 +35,15 @@ class MainnetDeploymentHelper {
     return factory
   }
 
-  async sendAndWaitForTransaction(txPromise) {
-    const tx = await txPromise
-    const minedTx = await ethers.provider.waitForTransaction(tx.hash, this.configParams.TX_CONFIRMATIONS)
 
-    if (!minedTx.status) {
-      throw ('Transaction Failed', txPromise);
-    }
-
-    return minedTx
-  }
-
-  async loadOrDeploy(factory, name, deploymentState, proxy, params = []) {
+  async loadOrDeploy(factory, name, deploymentState, proxy, params = [], opts) {
     if (deploymentState[name] && deploymentState[name].address) {
       console.log(`Using previously deployed ${name} contract at address ${deploymentState[name].address}`)
       return await factory.attach(deploymentState[name].address);
     }
 
     const contract = proxy
-      ? await upgrades.deployProxy(factory)
+      ? await upgrades.deployProxy(factory, params, opts)
       : await factory.deploy(...params);
 
     await this.deployerWallet.provider.waitForTransaction(contract.deployTransaction.hash, this.configParams.TX_CONFIRMATIONS)
@@ -76,15 +69,15 @@ class MainnetDeploymentHelper {
   }
 
   async deployPartially(treasurySigAddress, deploymentState) {
-    const VSTATokenFactory = await this.getFactory("VSTAToken")
-    const lockedVstaFactory = await this.getFactory("LockedVSTA")
+    const AGLTokenFactory = await this.getFactory("AGLToken")
+    const lockedAglFactory = await this.getFactory("LockedAGL")
 
-    const lockedVsta = await this.loadOrDeploy(lockedVstaFactory, 'lockedVsta', deploymentState)
+    const lockedAgl = await this.loadOrDeploy(lockedAglFactory, 'lockedAgl', deploymentState)
 
-    // Deploy VSTA Token, passing Community Issuance and Factory addresses to the constructor
-    const VSTAToken = await this.loadOrDeploy(
-      VSTATokenFactory,
-      'VSTAToken',
+    // Deploy AGL Token, passing Community Issuance and Factory addresses to the constructor
+    const AGLToken = await this.loadOrDeploy(
+      AGLTokenFactory,
+      'AGLToken',
       deploymentState,
       false,
       [treasurySigAddress]
@@ -93,28 +86,29 @@ class MainnetDeploymentHelper {
     if (!this.configParams.ETHERSCAN_BASE_URL) {
       console.log('No Etherscan Url defined, skipping verification')
     } else {
-      await this.verifyContract('lockedVsta', deploymentState, [treasurySigAddress])
-      await this.verifyContract('VSTAToken', deploymentState, [treasurySigAddress])
+      await this.verifyContract('lockedAgl', deploymentState, [treasurySigAddress])
+      await this.verifyContract('AGLToken', deploymentState, [treasurySigAddress])
     }
 
-    await this.isOwnershipRenounced(lockedVsta) ||
-      await this.sendAndWaitForTransaction(lockedVsta.setAddresses(
-        VSTAToken.address,
+    await this.isOwnershipRenounced(lockedAgl) ||
+      await this.sendAndWaitForTransaction(lockedAgl.setAddresses(
+        AGLToken.address,
         { gasPrice: this.configParams.GAS_PRICE }
       ))
 
     const partialContracts = {
-      lockedVsta,
-      VSTAToken
+      lockedAgl,
+      AGLToken
     }
 
     return partialContracts
   }
 
 
-  async deployLiquityCoreMainnet(deploymentState, multisig) {
+  async deployLiquityCoreMainnet(deploymentState, multisig, config) {
     // Get contract factories
     const priceFeedFactory = await this.getFactory("PriceFeed")
+
     const sortedTrovesFactory = await this.getFactory("SortedTroves")
     const troveManagerFactory = await this.getFactory("TroveManager")
     const activePoolFactory = await this.getFactory("ActivePool")
@@ -125,15 +119,20 @@ class MainnetDeploymentHelper {
     const collSurplusPoolFactory = await this.getFactory("CollSurplusPool")
     const borrowerOperationsFactory = await this.getFactory("BorrowerOperations")
     const hintHelpersFactory = await this.getFactory("HintHelpers")
-    const VSTTokenFactory = await this.getFactory("VSTToken")
-    const vaultParametersFactory = await this.getFactory("VestaParameters")
-    const lockedVstaFactory = await this.getFactory("LockedVSTA")
+    const vaultParametersFactory = await this.getFactory("AGLParameters")
+    const lockedAglFactory = await this.getFactory("LockedAGL")
     const adminContractFactory = await this.getFactory("AdminContract")
-
-    // Deploy txs
+    const stabilityPoolAgilelyFactory = await this.getFactory("StabilityPoolAgilely")
+    const USDATokenFactory = await this.getFactory("USDAToken")
+    const glpStakingFactory = await this.getFactory("AgilelyGLPStaking")
+    // Oracle 
+    const priceOracleV1Factory = await this.getFactory("PriceOracleV1")
+    const glpOracleFactory = await this.getFactory("GLPOracle")
+    const oracleVerificationV1Factory = await this.getFactory("OracleVerificationV1")
+    const chainlinkWrapperFactory = await this.getFactory("ChainlinkWrapper")
+    const customOracleFactory = await this.getFactory("CustomOracleWrapper")
 
     //// USE PROXY
-    const priceFeed = await this.loadOrDeploy(priceFeedFactory, 'priceFeed', deploymentState, true)
     const sortedTroves = await this.loadOrDeploy(sortedTrovesFactory, 'sortedTroves', deploymentState, true)
     const troveManager = await this.loadOrDeploy(troveManagerFactory, 'troveManager', deploymentState, true)
     const activePool = await this.loadOrDeploy(activePoolFactory, 'activePool', deploymentState, true)
@@ -142,27 +141,211 @@ class MainnetDeploymentHelper {
     const collSurplusPool = await this.loadOrDeploy(collSurplusPoolFactory, 'collSurplusPool', deploymentState, true)
     const borrowerOperations = await this.loadOrDeploy(borrowerOperationsFactory, 'borrowerOperations', deploymentState, true)
     const hintHelpers = await this.loadOrDeploy(hintHelpersFactory, 'hintHelpers', deploymentState, true)
-    const vestaParameters = await this.loadOrDeploy(vaultParametersFactory, 'vestaParameters', deploymentState, true)
+    const agilelyParameters = await this.loadOrDeploy(vaultParametersFactory, 'agilelyParameters', deploymentState, true)
+    const glpStaking = await this.loadOrDeploy(glpStakingFactory, 'glpStaking', deploymentState, true);
+
 
     //// NO PROXY
-    const stabilityPoolV1 = await this.loadOrDeploy(stabilityPoolFactory, 'stabilityPoolV1', deploymentState)
+    const agilelyStabilityPool = await this.loadOrDeploy(stabilityPoolAgilelyFactory, 'agilelyStabilityPool', deploymentState)
     const gasPool = await this.loadOrDeploy(gasPoolFactory, 'gasPool', deploymentState)
-    const lockedVsta = await this.loadOrDeploy(lockedVstaFactory, 'lockedVsta', deploymentState)
+    const lockedAgl = await this.loadOrDeploy(lockedAglFactory, 'lockedAgl', deploymentState)
     const adminContract = await this.loadOrDeploy(adminContractFactory, 'adminContract', deploymentState)
 
-    const VSTTokenParams = [
-      troveManager.address,
-      stabilityPoolManager.address,
-      borrowerOperations.address
-    ]
-    const vstToken = await this.loadOrDeploy(
-      VSTTokenFactory,
-      'VSTToken',
+    const usdaToken = await this.loadOrDeploy(
+      USDATokenFactory,
+      "USDAToken",
       deploymentState,
-      false,
-      VSTTokenParams
     )
 
+    const oracleVerificationV1 = await this.loadOrDeploy(
+      oracleVerificationV1Factory,
+      'oracleVerificationV1',
+      deploymentState,
+      true,
+      undefined,
+      {
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+    const priceFeed = await this.loadOrDeploy(
+      priceFeedFactory,
+      'priceFeed',
+      deploymentState,
+      true,
+      [oracleVerificationV1.address],
+      {
+        initializer: "setUp",
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+    const chainlinkOracle = await this.loadOrDeploy(
+      chainlinkWrapperFactory,
+      'chainlinkOracle',
+      deploymentState,
+      true,
+      [oracleVerificationV1.address, oracleVerificationV1.address],
+      {
+        initializer: "setUp",
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+    const customOracle = await this.loadOrDeploy(
+      customOracleFactory,
+      'customOracle',
+      deploymentState,
+      true,
+      undefined,
+      {
+        initializer: "setUp",
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+
+    const usdaOracle = await this.loadOrDeploy(
+      priceOracleV1Factory,
+      'usdaOracle',
+      deploymentState,
+      true,
+      ["USDA Oracle", 18],
+      {
+        initializer: "setUp",
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+    const glpOracle = await this.loadOrDeploy(
+      glpOracleFactory,
+      'glpOracle',
+      deploymentState,
+      true,
+      [
+        config.GLPOracleConfig.glpToken,
+        config.GLPOracleConfig.glpManager,
+        config.GLPOracleConfig.gmxVault
+      ],
+      {
+        initializer: "setUp",
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+    const glpOracleV1 = await this.loadOrDeploy(
+      priceOracleV1Factory,
+      'glpOracleV1',
+      deploymentState,
+      true,
+      ["glp Oracle", 18],
+      {
+        initializer: "setUp",
+        unsafeAllow: ['delegatecall']
+      }
+    );
+
+    const price = await glpOracle.getPrice();
+
+    await this.sendAndWaitForTransaction(
+      glpOracleV1.registerTrustedNode(multisig)
+    )
+
+    await this.sendAndWaitForTransaction(
+      usdaOracle.registerTrustedNode(multisig)
+    )
+
+    await this.sendAndWaitForTransaction(
+      usdaOracle.update(ethers.utils.parseEther('0.99999'))
+    )
+    await this.sendAndWaitForTransaction(
+      usdaOracle.update(ethers.utils.parseEther('0.99999'))
+    )
+
+    await this.sendAndWaitForTransaction(
+      glpOracleV1.update(price)
+    )
+
+    await this.sendAndWaitForTransaction(
+       glpOracleV1.update(price)
+    )
+
+
+    const hasAccess = await priceFeed.accesses(adminContract.address);
+
+    if (!hasAccess) {
+      const priceFeedtx = await priceFeed.setAccessTo(adminContract.address, true);
+      await priceFeedtx.wait();
+      console.log(priceFeedtx.hash)
+    }
+
+
+    await this.sendAndWaitForTransaction(
+      usdaOracle.transferOwnership(multisig)
+    )
+
+
+    await this.sendAndWaitForTransaction(
+      customOracle.addOracle(
+        usdaToken.address,
+        usdaOracle.address,
+        18,
+        "0x9d1b464a",
+        "0x053f14da",
+        "0x",
+        "0x313ce567",
+        { gasLimit: 2000000 }
+      )
+    )
+
+
+    await this.sendAndWaitForTransaction(
+      customOracle?.addOracle(
+        config.SGLP,
+        glpOracleV1.address,
+        18,
+        "0x9d1b464a",
+        "0x053f14da",
+        "0x",
+        "0x313ce567",
+        { gasLimit: 2000000 }
+      )
+    )
+
+    await this.sendAndWaitForTransaction(
+      chainlinkOracle?.addOracle(
+        constants.AddressZero,
+        config.CHAINLINK_ETHUSD_PROXY,
+        constants.AddressZero,
+        {
+          gasLimit: 2000000
+        }
+      )
+    )
+
+    await this.sendAndWaitForTransaction(priceFeed?.addOracle(
+      usdaToken.address,
+      customOracle?.address,
+      constants.AddressZero,
+      {
+        gasLimit: 2000000
+      }
+    ))
+
+    await this.sendAndWaitForTransaction(
+      usdaToken.setupContract(
+        troveManager.address,
+        agilelyStabilityPool.address,
+        borrowerOperations.address,
+        true
+      ),
+      {
+        gasLimit: 2000000
+      }
+    )
+
+
+    // ---- end interest manager ---- 
     if (!this.configParams.ETHERSCAN_BASE_URL) {
       console.log('No Etherscan Url defined, skipping verification')
     } else {
@@ -170,51 +353,67 @@ class MainnetDeploymentHelper {
       await this.verifyContract('sortedTroves', deploymentState)
       await this.verifyContract('troveManager', deploymentState)
       await this.verifyContract('activePool', deploymentState)
-      await this.verifyContract('stabilityPoolV1', deploymentState)
+      await this.verifyContract('agilelyStabilityPool', deploymentState)
       await this.verifyContract('stabilityPoolManager', deploymentState)
       await this.verifyContract('gasPool', deploymentState)
       await this.verifyContract('defaultPool', deploymentState)
       await this.verifyContract('collSurplusPool', deploymentState)
       await this.verifyContract('borrowerOperations', deploymentState)
       await this.verifyContract('hintHelpers', deploymentState)
-      await this.verifyContract('VSTToken', deploymentState, VSTTokenParams)
-      await this.verifyContract('vestaParameters', deploymentState)
-      await this.verifyContract('lockedVsta', deploymentState)
+      await this.verifyContract('USDAToken', deploymentState, USDATokenParams)
+      await this.verifyContract('agilelyParameters', deploymentState)
+      await this.verifyContract('lockedAgl', deploymentState)
       await this.verifyContract('adminContract', deploymentState)
+
+      // Oracle 相关
+      await this.verifyContract('usdaOracle', deploymentState)
+      await this.verifyContract('customOracle', deploymentState)
+      await this.verifyContract('chainlinkOracle', deploymentState)
+      await this.verifyContract('glpOracle', deploymentState)
+      await this.verifyContract('glpOracleV1', deploymentState)
+      await this.verifyContract('oracleVerificationV1', deploymentState)
+
     }
 
     const coreContracts = {
       priceFeed,
-      vstToken,
+      usdaToken,
       sortedTroves,
       troveManager,
       activePool,
       stabilityPoolManager,
-      stabilityPoolV1,
+      agilelyStabilityPool,
       adminContract,
       gasPool,
       defaultPool,
       collSurplusPool,
       borrowerOperations,
       hintHelpers,
-      vestaParameters,
-      lockedVsta
+      agilelyParameters,
+      lockedAgl,
+      glpStaking,
+      usdaOracle,
+      chainlinkOracle,
+      customOracle,
+      glpOracleV1,
+      glpOracle,
+      oracleVerificationV1,
     }
     return coreContracts
   }
 
-  async deployVSTAContractsMainnet(treasurySigAddress, deploymentState) {
-    const VSTAStakingFactory = await this.getFactory("VSTAStaking")
+  async deployAGLContractsMainnet(treasurySigAddress, deploymentState) {
+    const AGLStakingFactory = await this.getFactory("AGLStaking")
     const communityIssuanceFactory = await this.getFactory("CommunityIssuance")
-    const VSTATokenFactory = await this.getFactory("VSTAToken")
+    const AGLTokenFactory = await this.getFactory("AGLToken")
 
-    const VSTAStaking = await this.loadOrDeploy(VSTAStakingFactory, 'VSTAStaking', deploymentState, true)
+    const AGLStaking = await this.loadOrDeploy(AGLStakingFactory, 'AGLStaking', deploymentState, true)
     const communityIssuance = await this.loadOrDeploy(communityIssuanceFactory, 'communityIssuance', deploymentState, true)
 
-    // Deploy VSTA Token, passing Community Issuance and Factory addresses to the constructor
-    const VSTAToken = await this.loadOrDeploy(
-      VSTATokenFactory,
-      'VSTAToken',
+    // Deploy AGL Token, passing Community Issuance and Factory addresses to the constructor
+    const AGLToken = await this.loadOrDeploy(
+      AGLTokenFactory,
+      'AGLToken',
       deploymentState,
       false,
       [treasurySigAddress]
@@ -223,17 +422,102 @@ class MainnetDeploymentHelper {
     if (!this.configParams.ETHERSCAN_BASE_URL) {
       console.log('No Etherscan Url defined, skipping verification')
     } else {
-      await this.verifyContract('VSTAStaking', deploymentState)
+      await this.verifyContract('AGLStaking', deploymentState)
       await this.verifyContract('communityIssuance', deploymentState)
-      await this.verifyContract('VSTAToken', deploymentState, [treasurySigAddress])
+      await this.verifyContract('AGLToken', deploymentState, [treasurySigAddress])
     }
 
-    const VSTAContracts = {
-      VSTAStaking,
+    const AGLContracts = {
+      AGLStaking,
       communityIssuance,
-      VSTAToken
+      AGLToken
     }
-    return VSTAContracts
+    return AGLContracts
+  }
+
+
+  async deployRedemptorContractMainnet(agilelyCore,AGLContracts, deploymentState) {
+    const troveRedemptorFactory = await this.getFactory("TroveRedemptor")
+    const troveRedemptor = await this.loadOrDeploy(
+        troveRedemptorFactory,
+        'troveRedemptor',
+        deploymentState,
+        true,
+        [
+            agilelyCore.troveManager.address,
+            agilelyCore.sortedTroves.address,
+            agilelyCore.usdaToken.address,
+            agilelyCore.agilelyParameters.address,
+            agilelyCore.collSurplusPool.address,
+            agilelyCore.gasPool.address,
+            AGLContracts.AGLStaking.address,
+            agilelyCore.hintHelpers.address
+        ],
+        {
+          initializer: "setUp",
+        }
+    )
+
+
+    await this.sendAndWaitForTransaction(
+        troveRedemptor.setAGLParameters(
+            agilelyCore.agilelyParameters.address,
+            { gasLimit: 2000000 }
+        )
+    )
+    await this.sendAndWaitForTransaction(
+        agilelyCore.sortedTroves.setRedemptorAddress(
+            troveRedemptor.address,
+            { gasLimit: 2000000 }
+        )
+    )
+    await this.sendAndWaitForTransaction(
+        agilelyCore.usdaToken.setRedemptorAddress(
+            troveRedemptor.address,
+            { gasLimit: 2000000 }
+        )
+    )
+
+    await this.sendAndWaitForTransaction(
+        agilelyCore.troveManager.setRedemptorAddress(
+            troveRedemptor.address,
+            { gasLimit: 2000000 }
+        )
+    )
+    await this.sendAndWaitForTransaction(
+        agilelyCore.activePool.setRedemptorAddress(
+            troveRedemptor.address,
+            { gasLimit: 2000000 }
+        )
+    )
+    await this.sendAndWaitForTransaction(
+        agilelyCore.collSurplusPool.setRedemptorAddress(
+            troveRedemptor.address,
+            { gasLimit: 2000000 }
+        )
+    )
+    await this.sendAndWaitForTransaction(
+        AGLContracts.AGLStaking.setRedemptorAddress(
+            troveRedemptor.address,
+            { gasLimit: 2000000 }
+        )
+    )
+
+
+
+  }
+
+  async renounceOwnership(agilelyCore){
+    await this.sendAndWaitForTransaction(
+        agilelyCore.collSurplusPool.renounceOwnership(
+            { gasLimit: 2000000 }
+        )
+    )
+    await this.sendAndWaitForTransaction(
+        agilelyCore.sortedTroves.renounceOwnership(
+            { gasLimit: 2000000 }
+        )
+    )
   }
 
   async deployMultiTroveGetterMainnet(liquityCore, deploymentState) {
@@ -265,15 +549,11 @@ class MainnetDeploymentHelper {
     console.log("%s Is Initalized : %s", await contract.NAME(), isInitialized);
     return isInitialized;
   }
+
   // Connect contracts to their dependencies
-  async connectCoreContractsMainnet(contracts, VSTAContracts, chainlinkFlagAddress) {
+  async connectCoreContractsMainnet(contracts, AGLContracts, chainlinkFlagAddress) {
     const gasPrice = this.configParams.GAS_PRICE
 
-    await this.isOwnershipRenounced(contracts.priceFeed) ||
-      await this.sendAndWaitForTransaction(contracts.priceFeed.setAddresses(
-        chainlinkFlagAddress,
-        contracts.adminContract.address,
-        { gasPrice }))
 
     await this.isOwnershipRenounced(contracts.sortedTroves) ||
       await this.sendAndWaitForTransaction(contracts.sortedTroves.setParams(
@@ -282,14 +562,14 @@ class MainnetDeploymentHelper {
         { gasPrice }
       ))
 
-    await this.isOwnershipRenounced(contracts.lockedVsta) ||
-      await this.sendAndWaitForTransaction(contracts.lockedVsta.setAddresses(
-        VSTAContracts.VSTAToken.address,
+    await this.isOwnershipRenounced(contracts.lockedAgl) ||
+      await this.sendAndWaitForTransaction(contracts.lockedAgl.setAddresses(
+        AGLContracts.AGLToken.address,
         { gasPrice }
       ))
 
-    await this.isOwnershipRenounced(contracts.vestaParameters) ||
-      await this.sendAndWaitForTransaction(contracts.vestaParameters.setAddresses(
+    await this.isOwnershipRenounced(contracts.agilelyParameters) ||
+      await this.sendAndWaitForTransaction(contracts.agilelyParameters.setAddresses(
         contracts.activePool.address,
         contracts.defaultPool.address,
         contracts.priceFeed.address,
@@ -297,16 +577,17 @@ class MainnetDeploymentHelper {
         { gasPrice }
       ))
 
+
     await this.isOwnershipRenounced(contracts.troveManager) ||
       await this.sendAndWaitForTransaction(contracts.troveManager.setAddresses(
         contracts.borrowerOperations.address,
         contracts.stabilityPoolManager.address,
         contracts.gasPool.address,
         contracts.collSurplusPool.address,
-        contracts.vstToken.address,
+        contracts.usdaToken.address,
         contracts.sortedTroves.address,
-        VSTAContracts.VSTAStaking.address,
-        contracts.vestaParameters.address,
+        AGLContracts.AGLStaking.address,
+        contracts.agilelyParameters.address,
         { gasPrice }
       ))
 
@@ -317,9 +598,9 @@ class MainnetDeploymentHelper {
         contracts.gasPool.address,
         contracts.collSurplusPool.address,
         contracts.sortedTroves.address,
-        contracts.vstToken.address,
-        VSTAContracts.VSTAStaking.address,
-        contracts.vestaParameters.address,
+        contracts.usdaToken.address,
+        AGLContracts.AGLStaking.address,
+        contracts.agilelyParameters.address,
         { gasPrice }
       ))
 
@@ -356,13 +637,13 @@ class MainnetDeploymentHelper {
 
     await this.isOwnershipRenounced(contracts.adminContract) ||
       await this.sendAndWaitForTransaction(contracts.adminContract.setAddresses(
-        contracts.vestaParameters.address,
+        contracts.agilelyParameters.address,
         contracts.stabilityPoolManager.address,
         contracts.borrowerOperations.address,
         contracts.troveManager.address,
-        contracts.vstToken.address,
+        contracts.usdaToken.address,
         contracts.sortedTroves.address,
-        VSTAContracts.communityIssuance.address,
+        AGLContracts.communityIssuance.address,
         { gasPrice }
       ))
 
@@ -371,17 +652,69 @@ class MainnetDeploymentHelper {
       await this.sendAndWaitForTransaction(contracts.hintHelpers.setAddresses(
         contracts.sortedTroves.address,
         contracts.troveManager.address,
-        contracts.vestaParameters.address,
+        contracts.agilelyParameters.address,
         { gasPrice }
       ))
+
+    await this.isOwnershipRenounced(contracts.glpStaking) ||
+      await this.sendAndWaitForTransaction(contracts.glpStaking.setUp(
+        configParams.agilelyAddresses.AGL_SAFE,
+        configParams.externalAddrs.SGLP,
+        configParams.externalAddrs.GMX_REWARD_ROUTERV2,
+        configParams.externalAddrs.FEE_GLP_TRACKER_REWARD,
+        { gasPrice }
+      ))
+
   }
 
-  async connectVSTAContractsToCoreMainnet(VSTAContracts, coreContracts, treasuryAddress) {
+  async setParamsToCoreMainnet(coreContracts, interestContracts, dexContracts, AGLContracts, deploymentState){
+    await this.sendAndWaitForTransaction(
+        coreContracts.troveManager.setInterestManager(
+        interestContracts.agilelyInterestManager.address,
+            { gasLimit: 2000000 }
+    ));
+
+    await this.sendAndWaitForTransaction(
+        coreContracts.borrowerOperations.setAGLccess(
+            interestContracts.agilelyInterestManager.address,
+            true,
+            { gasLimit: 2000000 }
+        ));
+
+    await this.sendAndWaitForTransaction(
+        coreContracts.borrowerOperations.setDexTrader(
+            dexContracts.dexTrader.address,
+            { gasLimit: 2000000 }
+        ));
+
+    //stability pool
+    //TODO
+    //config eth stability pool
+
+    await this.sendAndWaitForTransaction(
+        AGLContracts.communityIssuance.configStabilityPoolAndSend(
+            deploymentState['ProxyStabilityPoolETH'].address,
+            AGLContracts.AGLToken.address,
+            ethers.utils.parseEther("1"),
+            ethers.utils.parseEther("10000"),
+            { gasLimit: 2000000 }
+        ));
+
+
+
+
+    //setCollateralParameters
+
+    //set SGLP
+
+  }
+  async connectAGLContractsToCoreMainnet(AGLContracts, coreContracts, treasuryAddress) {
     const gasPrice = this.configParams.GAS_PRICE
-    await this.isOwnershipRenounced(VSTAContracts.VSTAStaking) ||
-      await this.sendAndWaitForTransaction(VSTAContracts.VSTAStaking.setAddresses(
-        VSTAContracts.VSTAToken.address,
-        coreContracts.vstToken.address,
+    await this.isOwnershipRenounced(AGLContracts.AGLStaking) ||
+      await this.sendAndWaitForTransaction(AGLContracts.AGLStaking.setAddresses(
+        AGLContracts.AGLToken.address,
+        // TODO - 这里需要考虑是否替换为 USDAScript 合约
+        coreContracts.usdaToken.address,
         coreContracts.troveManager.address,
         coreContracts.borrowerOperations.address,
         coreContracts.activePool.address,
@@ -389,9 +722,9 @@ class MainnetDeploymentHelper {
         { gasPrice }
       ))
 
-    await this.isOwnershipRenounced(VSTAContracts.communityIssuance) ||
-      await this.sendAndWaitForTransaction(VSTAContracts.communityIssuance.setAddresses(
-        VSTAContracts.VSTAToken.address,
+    await this.isOwnershipRenounced(AGLContracts.communityIssuance) ||
+      await this.sendAndWaitForTransaction(AGLContracts.communityIssuance.setAddresses(
+        AGLContracts.AGLToken.address,
         coreContracts.stabilityPoolManager.address,
         coreContracts.adminContract.address,
         { gasPrice }
@@ -436,6 +769,45 @@ class MainnetDeploymentHelper {
       console.log(`${contractName}: ${contracts[contractName].address}`);
     }
   }
+
+  /**
+ * @error throws an error if the mint isn't successful.
+ * @param txPromise The transaction promise you want to execute
+ * @returns TranscationReceipt of the minedTx
+ */
+  async sendAndWaitForTransaction(
+    txPromise
+  ) {
+    const tx = await txPromise
+    const minedTx = await ethers.provider.waitForTransaction(
+      tx.hash,
+      this.configParams.TX_CONFIRMATIONS
+    )
+
+
+    if (!minedTx.status) {
+      throw `Transaction failed ${tx.hash}`
+    } else {
+      colorLog(
+        Colors.blue,
+        `${minedTx.transactionHash} executed successfully`
+      )
+    }
+    return minedTx
+  }
 }
 
-module.exports = MainnetDeploymentHelper
+export const Colors = {
+  gray: 90,
+  green: 92,
+  red: 91,
+  yellow: 93,
+  blue: 36,
+  white: 0,
+}
+
+export function colorLog(colorCode, msg) {
+  console.log("\u001b[" + colorCode + "m" + msg + "\u001b[0m")
+}
+
+export default MainnetDeploymentHelper

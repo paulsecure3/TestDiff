@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.10;
-import "./IVestaBase.sol";
+import "./IAGLBase.sol";
 import "./IStabilityPool.sol";
-import "./IVSTToken.sol";
-import "./IVSTAStaking.sol";
+import "./IUSDAToken.sol";
+import "./IAGLStaking.sol";
 import "./ICollSurplusPool.sol";
 import "./ISortedTroves.sol";
 import "./IActivePool.sol";
@@ -12,7 +12,13 @@ import "./IDefaultPool.sol";
 import "./IStabilityPoolManager.sol";
 
 // Common interface for the Trove Manager.
-interface ITroveManager is IVestaBase {
+interface ITroveManager is IAGLBase {
+
+	error CallerNotBorrowerOperations();
+	error CallerNotBorrowerOrRedemptor();
+	error CallerNotRedemptor();
+
+
 	enum Status {
 		nonExistent,
 		active,
@@ -40,7 +46,7 @@ interface ITroveManager is IVestaBase {
 
 	struct LocalVariables_OuterLiquidationFunction {
 		uint256 price;
-		uint256 VSTInStabPool;
+		uint256 USDAInStabPool;
 		bool recoveryModeAtStart;
 		uint256 liquidatedDebt;
 		uint256 liquidatedColl;
@@ -53,7 +59,7 @@ interface ITroveManager is IVestaBase {
 	}
 
 	struct LocalVariables_LiquidationSequence {
-		uint256 remainingVSTInStabPool;
+		uint256 remainingUSDAInStabPool;
 		uint256 i;
 		uint256 ICR;
 		address user;
@@ -72,7 +78,7 @@ interface ITroveManager is IVestaBase {
 		uint256 entireTroveDebt;
 		uint256 entireTroveColl;
 		uint256 collGasCompensation;
-		uint256 VSTGasCompensation;
+		uint256 USDAGasCompensation;
 		uint256 debtToOffset;
 		uint256 collToSendToSP;
 		uint256 debtToRedistribute;
@@ -84,7 +90,7 @@ interface ITroveManager is IVestaBase {
 		uint256 totalCollInSequence;
 		uint256 totalDebtInSequence;
 		uint256 totalCollGasCompensation;
-		uint256 totalVSTGasCompensation;
+		uint256 totalUSDAGasCompensation;
 		uint256 totalDebtToOffset;
 		uint256 totalCollToSendToSP;
 		uint256 totalDebtToRedistribute;
@@ -95,8 +101,8 @@ interface ITroveManager is IVestaBase {
 	struct ContractsCache {
 		IActivePool activePool;
 		IDefaultPool defaultPool;
-		IVSTToken vstToken;
-		IVSTAStaking vstaStaking;
+		IUSDAToken usdaToken;
+		IAGLStaking aglStaking;
 		ISortedTroves sortedTroves;
 		ICollSurplusPool collSurplusPool;
 		address gasPoolAddress;
@@ -104,45 +110,43 @@ interface ITroveManager is IVestaBase {
 	// --- Variable container structs for redemptions ---
 
 	struct RedemptionTotals {
-		uint256 remainingVST;
-		uint256 totalVSTToRedeem;
+		uint256 remainingUSDA;
+		uint256 totalUSDAToRedeem;
 		uint256 totalAssetDrawn;
 		uint256 ETHFee;
 		uint256 ETHToSendToRedeemer;
 		uint256 decayedBaseRate;
 		uint256 price;
-		uint256 totalVSTSupplyAtStart;
+		uint256 totalUSDASupplyAtStart;
 	}
 
 	struct SingleRedemptionValues {
-		uint256 VSTLot;
+		uint256 USDALot;
 		uint256 ETHLot;
 		bool cancelledPartial;
 	}
 
 	// --- Events ---
 
-	event BorrowerOperationsAddressChanged(
-		address _newBorrowerOperationsAddress
-	);
-	event VSTTokenAddressChanged(address _newVSTTokenAddress);
-	event StabilityPoolAddressChanged(address _stabilityPoolAddress);
+	event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
+	event USDATokenAddressChanged(address _USDATokenAddress);
+	event StabilityPoolManagerAddressChanged(address _stabilityPoolManagerAddress);
 	event GasPoolAddressChanged(address _gasPoolAddress);
 	event CollSurplusPoolAddressChanged(address _collSurplusPoolAddress);
 	event SortedTrovesAddressChanged(address _sortedTrovesAddress);
-	event VSTAStakingAddressChanged(address _VSTAStakingAddress);
+	event AGLStakingAddressChanged(address _AGLStakingAddress);
 
 	event Liquidation(
 		address indexed _asset,
 		uint256 _liquidatedDebt,
 		uint256 _liquidatedColl,
 		uint256 _collGasCompensation,
-		uint256 _VSTGasCompensation
+		uint256 _USDAGasCompensation
 	);
 	event Redemption(
 		address indexed _asset,
-		uint256 _attemptedVSTAmount,
-		uint256 _actualVSTAmount,
+		uint256 _attemptedAGLmount,
+		uint256 _actualAGLmount,
 		uint256 _AssetSent,
 		uint256 _AssetFee
 	);
@@ -162,34 +166,16 @@ interface ITroveManager is IVestaBase {
 		uint8 operation
 	);
 	event BaseRateUpdated(address indexed _asset, uint256 _baseRate);
-	event LastFeeOpTimeUpdated(
-		address indexed _asset,
-		uint256 _lastFeeOpTime
-	);
-	event TotalStakesUpdated(
-		address indexed _asset,
-		uint256 _newTotalStakes
-	);
+	event LastFeeOpTimeUpdated(address indexed _asset, uint256 _lastFeeOpTime);
+	event TotalStakesUpdated(address indexed _asset, uint256 _newTotalStakes);
 	event SystemSnapshotsUpdated(
 		address indexed _asset,
 		uint256 _totalStakesSnapshot,
 		uint256 _totalCollateralSnapshot
 	);
-	event LTermsUpdated(
-		address indexed _asset,
-		uint256 _L_ETH,
-		uint256 _L_VSTDebt
-	);
-	event TroveSnapshotsUpdated(
-		address indexed _asset,
-		uint256 _L_ETH,
-		uint256 _L_VSTDebt
-	);
-	event TroveIndexUpdated(
-		address indexed _asset,
-		address _borrower,
-		uint256 _newIndex
-	);
+	event LTermsUpdated(address indexed _asset, uint256 _L_ETH, uint256 _L_USDADebt);
+	event TroveSnapshotsUpdated(address indexed _asset, uint256 _L_ETH, uint256 _L_USDADebt);
+	event TroveIndexUpdated(address indexed _asset, address _borrower, uint256 _newIndex);
 
 	event TroveUpdated(
 		address indexed _asset,
@@ -207,49 +193,39 @@ interface ITroveManager is IVestaBase {
 		TroveManagerOperation _operation
 	);
 
+	event SystemUnpaidInterestUpdated(address indexed _asset, uint256 unpaidInterest);
+	event VaultUnpaidInterestUpdated(
+		address indexed _asset,
+		address indexed _vault,
+		uint256 unpaidInterest
+	);
+
 	enum TroveManagerOperation {
 		applyPendingRewards,
 		liquidateInNormalMode,
 		liquidateInRecoveryMode,
-		redeemCollateral
+		redeemCollateral,
+		systemUpdate
 	}
 
 	// --- Functions ---
 
-	function setAddresses(
-		address _borrowerOperationsAddress,
-		address _stabilityPoolAddress,
-		address _gasPoolAddress,
-		address _collSurplusPoolAddress,
-		address _vstTokenAddress,
-		address _sortedTrovesAddress,
-		address _VSTAStakingAddress,
-		address _vestaParamsAddress
-	) external;
+	function Troves(address, address) external view returns (address asset, uint256 debt, uint256 coll, uint256 stake, Status status, uint128 arrayIndex);
 
-	function stabilityPoolManager()
-		external
-		view
-		returns (IStabilityPoolManager);
+	function stabilityPoolManager() external view returns (IStabilityPoolManager);
 
-	function vstToken() external view returns (IVSTToken);
+	function usdaToken() external view returns (IUSDAToken);
 
-	function vstaStaking() external view returns (IVSTAStaking);
+	function aglStaking() external view returns (IAGLStaking);
 
-	function getTroveOwnersCount(address _asset)
-		external
-		view
-		returns (uint256);
+	function getTroveOwnersCount(address _asset) external view returns (uint256);
 
 	function getTroveFromTroveOwnersArray(address _asset, uint256 _index)
 		external
 		view
 		returns (address);
 
-	function getNominalICR(address _asset, address _borrower)
-		external
-		view
-		returns (uint256);
+	function getNominalICR(address _asset, address _borrower) external view returns (uint256);
 
 	function getCurrentICR(
 		address _asset,
@@ -261,28 +237,24 @@ interface ITroveManager is IVestaBase {
 
 	function liquidateTroves(address _asset, uint256 _n) external;
 
-	function batchLiquidateTroves(
-		address _asset,
-		address[] memory _troveArray
-	) external;
+	function batchLiquidateTroves(address _asset, address[] memory _troveArray) external;
 
-	function redeemCollateral(
-		address _asset,
-		uint256 _VSTAmount,
-		address _firstRedemptionHint,
-		address _upperPartialRedemptionHint,
-		address _lowerPartialRedemptionHint,
-		uint256 _partialRedemptionHintNICR,
-		uint256 _maxIterations,
-		uint256 _maxFee
-	) external;
+	// function redeemCollateral(
+	// 	address _asset,
+	// 	uint256 _AGLmount,
+	// 	address _firstRedemptionHint,
+	// 	address _upperPartialRedemptionHint,
+	// 	address _lowerPartialRedemptionHint,
+	// 	uint256 _partialRedemptionHintNICR,
+	// 	uint256 _maxIterations,
+	// 	uint256 _maxFee
+	// ) external;
 
 	function updateStakeAndTotalStakes(address _asset, address _borrower)
 		external
 		returns (uint256);
 
-	function updateTroveRewardSnapshots(address _asset, address _borrower)
-		external;
+	function updateTroveRewardSnapshots(address _asset, address _borrower) external;
 
 	function addTroveOwnerToArray(address _asset, address _borrower)
 		external
@@ -295,15 +267,12 @@ interface ITroveManager is IVestaBase {
 		view
 		returns (uint256);
 
-	function getPendingVSTDebtReward(address _asset, address _borrower)
+	function getPendingUSDADebtReward(address _asset, address _borrower)
 		external
 		view
 		returns (uint256);
 
-	function hasPendingRewards(address _asset, address _borrower)
-		external
-		view
-		returns (bool);
+	function hasPendingRewards(address _asset, address _borrower) external view returns (bool);
 
 	function getEntireDebtAndColl(address _asset, address _borrower)
 		external
@@ -311,70 +280,45 @@ interface ITroveManager is IVestaBase {
 		returns (
 			uint256 debt,
 			uint256 coll,
-			uint256 pendingVSTDebtReward,
+			uint256 pendingUSDADebtReward,
 			uint256 pendingAssetReward
 		);
 
 	function closeTrove(address _asset, address _borrower) external;
 
+	function closeTroveByRedemptor(address _asset, address _borrower) external;
+
 	function removeStake(address _asset, address _borrower) external;
 
-	function getRedemptionRate(address _asset)
-		external
-		view
-		returns (uint256);
+	function getRedemptionRate(address _asset) external view returns (uint256);
 
-	function getRedemptionRateWithDecay(address _asset)
-		external
-		view
-		returns (uint256);
+	function getRedemptionRateWithDecay(address _asset) external view returns (uint256);
 
 	function getRedemptionFeeWithDecay(address _asset, uint256 _assetDraw)
 		external
 		view
 		returns (uint256);
 
-	function getBorrowingRate(address _asset)
-		external
-		view
-		returns (uint256);
+	function getBorrowingRate(address _asset) external view returns (uint256);
 
-	function getBorrowingRateWithDecay(address _asset)
-		external
-		view
-		returns (uint256);
+	function getBorrowingRateWithDecay(address _asset) external view returns (uint256);
 
-	function getBorrowingFee(address _asset, uint256 VSTDebt)
-		external
-		view
-		returns (uint256);
+	function getBorrowingFee(address _asset, uint256 USDADebt) external view returns (uint256);
 
-	function getBorrowingFeeWithDecay(address _asset, uint256 _VSTDebt)
+	function getBorrowingFeeWithDecay(address _asset, uint256 _USDADebt)
 		external
 		view
 		returns (uint256);
 
 	function decayBaseRateFromBorrowing(address _asset) external;
 
-	function getTroveStatus(address _asset, address _borrower)
-		external
-		view
-		returns (uint256);
+	function getTroveStatus(address _asset, address _borrower) external view returns (uint256);
 
-	function getTroveStake(address _asset, address _borrower)
-		external
-		view
-		returns (uint256);
+	function getTroveStake(address _asset, address _borrower) external view returns (uint256);
 
-	function getTroveDebt(address _asset, address _borrower)
-		external
-		view
-		returns (uint256);
+	function getTroveDebt(address _asset, address _borrower) external view returns (uint256);
 
-	function getTroveColl(address _asset, address _borrower)
-		external
-		view
-		returns (uint256);
+	function getTroveColl(address _asset, address _borrower) external view returns (uint256);
 
 	function setTroveStatus(
 		address _asset,
@@ -406,16 +350,28 @@ interface ITroveManager is IVestaBase {
 		uint256 _collDecrease
 	) external returns (uint256);
 
-	function getTCR(address _asset, uint256 _price)
+	function getTCR(address _asset, uint256 _price) external view returns (uint256);
+
+	function checkRecoveryMode(address _asset, uint256 _price) external returns (bool);
+
+	function getSystemTotalUnpaidInterest(address _asset) external view returns (uint256);
+
+	function getUnpaidInterestOfUser(address _asset, address _user)
 		external
 		view
 		returns (uint256);
 
-	function checkRecoveryMode(address _asset, uint256 _price)
-		external
-		returns (bool);
+	function setTroveCollAndDebt(address _borrower, address _asset, uint256 _newDebt, uint256 _newColl)  external  ;
 
-	function isValidAsset(address asset) external view returns (bool);
+	function updateBaseRateFromRedemption(
+		address _asset,
+		uint256 _ETHDrawn,
+		uint256 _price,
+		uint256 _totalUSDASupply
+	) external returns (uint256);
 
-	function addNewAsset(address asset) external;
+	function getRedemptionFee(address _asset, uint256 _assetDraw)
+	external
+	view
+	returns (uint256);
 }
