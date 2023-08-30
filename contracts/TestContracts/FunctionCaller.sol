@@ -4,10 +4,10 @@ pragma solidity ^0.8.10;
 import "../Interfaces/ITroveManager.sol";
 import "../Interfaces/ISortedTroves.sol";
 import "../Interfaces/IPriceFeed.sol";
-import "../Dependencies/VestaMath.sol";
+import "../Dependencies/LiquityMath.sol";
 
 /* Wrapper contract - used for calculating gas of read-only and internal functions. 
-Not part of the Vesta application. */
+Not part of the Liquity application. */
 contract FunctionCaller {
 	ITroveManager troveManager;
 	address public troveManagerAddress;
@@ -51,6 +51,7 @@ contract FunctionCaller {
 		address _prevId,
 		address _nextId
 	) external view returns (address, address) {
-		return sortedTroves.findInsertPosition(_asset, _NICR, _prevId, _nextId);
+		return
+			sortedTroves.findInsertPosition(_asset, _NICR, _prevId, _nextId);
 	}
 }

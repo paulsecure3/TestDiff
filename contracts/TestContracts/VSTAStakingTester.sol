@@ -4,5 +4,9 @@ pragma solidity ^0.8.10;
 import "../VSTA/VSTAStaking.sol";
 
 contract VSTAStakingTester is VSTAStaking {
-	function requireCallerIsTroveManager() external view callerIsTroveManager {}
+	function requireCallerIsTroveManager()
+		external
+		view
+		callerIsTroveManager
+	{}
 }

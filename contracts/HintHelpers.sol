@@ -3,12 +3,11 @@
 pragma solidity ^0.8.10;
 import "./Interfaces/ITroveManager.sol";
 import "./Interfaces/ISortedTroves.sol";
-import "./Interfaces/IPriceFeedV2.sol";
 import "./Dependencies/VestaBase.sol";
 import "./Dependencies/CheckContract.sol";
 
 contract HintHelpers is VestaBase, CheckContract {
-	using SafeMathUpgradeable for uint256;
+	using SafeMath for uint256;
 	string public constant NAME = "HintHelpers";
 
 	struct LocalRedemptionVars {
@@ -21,9 +20,6 @@ contract HintHelpers is VestaBase, CheckContract {
 	ISortedTroves public sortedTroves;
 	ITroveManager public troveManager;
 
-	bool public isInitialized;
-	IPriceFeedV2 public priceFeed;
-
 	// --- Events ---
 
 	event SortedTrovesAddressChanged(address _sortedTrovesAddress);
@@ -35,15 +31,10 @@ contract HintHelpers is VestaBase, CheckContract {
 		address _sortedTrovesAddress,
 		address _troveManagerAddress,
 		address _vaultParametersAddress
-	) external initializer {
-		require(!isInitialized, "Already initialized");
+	) external onlyOwner {
 		checkContract(_sortedTrovesAddress);
 		checkContract(_troveManagerAddress);
 		checkContract(_vaultParametersAddress);
-
-		isInitialized = true;
-
-		__Ownable_init();
 
 		sortedTroves = ISortedTroves(_sortedTrovesAddress);
 		troveManager = ITroveManager(_troveManagerAddress);
@@ -52,11 +43,6 @@ contract HintHelpers is VestaBase, CheckContract {
 		emit TroveManagerAddressChanged(_troveManagerAddress);
 
 		setVestaParameters(_vaultParametersAddress);
-	}
-
-	function setPriceFeed(address _priceFeedAddress) external onlyOwner {
-		checkContract(_priceFeedAddress);
-		priceFeed = IPriceFeedV2(_priceFeedAddress);
 	}
 
 	// --- Functions ---
@@ -109,7 +95,10 @@ contract HintHelpers is VestaBase, CheckContract {
 			troveManager.getCurrentICR(vars._asset, currentTroveuser, _price) <
 			vestaParams.MCR(vars._asset)
 		) {
-			currentTroveuser = sortedTrovesCached.getPrev(vars._asset, currentTroveuser);
+			currentTroveuser = sortedTrovesCached.getPrev(
+				vars._asset,
+				currentTroveuser
+			);
 		}
 
 		firstRedemptionHint = currentTroveuser;
@@ -118,28 +107,47 @@ contract HintHelpers is VestaBase, CheckContract {
 			_maxIterations = type(uint256).max;
 		}
 
-		while (currentTroveuser != address(0) && remainingVST > 0 && _maxIterations-- > 0) {
+		while (
+			currentTroveuser != address(0) &&
+			remainingVST > 0 &&
+			_maxIterations-- > 0
+		) {
 			uint256 netVSTDebt = _getNetDebt(
 				vars._asset,
 				troveManager.getTroveDebt(vars._asset, currentTroveuser)
-			).add(troveManager.getPendingVSTDebtReward(vars._asset, currentTroveuser));
+			).add(
+					troveManager.getPendingVSTDebtReward(
+						vars._asset,
+						currentTroveuser
+					)
+				);
 
 			if (netVSTDebt > remainingVST) {
 				if (netVSTDebt > vestaParams.MIN_NET_DEBT(vars._asset)) {
-					uint256 maxRedeemableVST = VestaMath._min(
+					uint256 maxRedeemableVST = LiquityMath._min(
 						remainingVST,
 						netVSTDebt.sub(vestaParams.MIN_NET_DEBT(vars._asset))
 					);
 
-					uint256 ETH = troveManager.getTroveColl(vars._asset, currentTroveuser).add(
-						troveManager.getPendingAssetReward(vars._asset, currentTroveuser)
-					);
+					uint256 ETH = troveManager
+						.getTroveColl(vars._asset, currentTroveuser)
+						.add(
+							troveManager.getPendingAssetReward(
+								vars._asset,
+								currentTroveuser
+							)
+						);
 
-					uint256 newColl = ETH.sub(maxRedeemableVST.mul(DECIMAL_PRECISION).div(_price));
+					uint256 newColl = ETH.sub(
+						maxRedeemableVST.mul(DECIMAL_PRECISION).div(_price)
+					);
 					uint256 newDebt = netVSTDebt.sub(maxRedeemableVST);
 
 					uint256 compositeDebt = _getCompositeDebt(vars._asset, newDebt);
-					partialRedemptionHintNICR = VestaMath._computeNominalCR(newColl, compositeDebt);
+					partialRedemptionHintNICR = LiquityMath._computeNominalCR(
+						newColl,
+						compositeDebt
+					);
 
 					remainingVST = remainingVST.sub(maxRedeemableVST);
 				}
@@ -148,7 +156,10 @@ contract HintHelpers is VestaBase, CheckContract {
 				remainingVST = remainingVST.sub(netVSTDebt);
 			}
 
-			currentTroveuser = sortedTrovesCached.getPrev(vars._asset, currentTroveuser);
+			currentTroveuser = sortedTrovesCached.getPrev(
+				vars._asset,
+				currentTroveuser
+			);
 		}
 
 		truncatedVSTamount = _VSTamount.sub(remainingVST);
@@ -184,7 +195,7 @@ contract HintHelpers is VestaBase, CheckContract {
 		}
 
 		hintAddress = sortedTroves.getLast(_asset);
-		diff = VestaMath._getAbsoluteDifference(
+		diff = LiquityMath._getAbsoluteDifference(
 			_CR,
 			troveManager.getNominalICR(_asset, hintAddress)
 		);
@@ -193,14 +204,25 @@ contract HintHelpers is VestaBase, CheckContract {
 		uint256 i = 1;
 
 		while (i < _numTrials) {
-			latestRandomSeed = uint256(keccak256(abi.encodePacked(latestRandomSeed)));
+			latestRandomSeed = uint256(
+				keccak256(abi.encodePacked(latestRandomSeed))
+			);
 
 			uint256 arrayIndex = latestRandomSeed % arrayLength;
-			address currentAddress = troveManager.getTroveFromTroveOwnersArray(_asset, arrayIndex);
-			uint256 currentNICR = troveManager.getNominalICR(_asset, currentAddress);
+			address currentAddress = troveManager.getTroveFromTroveOwnersArray(
+				_asset,
+				arrayIndex
+			);
+			uint256 currentNICR = troveManager.getNominalICR(
+				_asset,
+				currentAddress
+			);
 
 			// check if abs(current - CR) > abs(closest - CR), and update closest if current is closer
-			uint256 currentDiff = VestaMath._getAbsoluteDifference(currentNICR, _CR);
+			uint256 currentDiff = LiquityMath._getAbsoluteDifference(
+				currentNICR,
+				_CR
+			);
 
 			if (currentDiff < diff) {
 				diff = currentDiff;
@@ -210,50 +232,12 @@ contract HintHelpers is VestaBase, CheckContract {
 		}
 	}
 
-	/**
-	@notice getLiquidatableAmount(address _asset) - returns total amount of VST liquidatable from an asset.
-	    This function goes thru vault from most at risk to least and counts the amount of VST liquidatable until it hits a vault
-		that is not liquidatable.
-	@param _asset address of the asset, ZERO_ADDRESS for ETH
-	@param _assetPrice the price of the asset in 1e18 format.
-	@return result_ total amount of VST liquidatable from an asset
-	@dev if `_assetPrice` is zero, it will uses PriceFeed's pricing
-	*/
-	function getLiquidatableAmount(address _asset, uint256 _assetPrice)
+	function computeNominalCR(uint256 _coll, uint256 _debt)
 		external
-		view
-		returns (uint256 result_)
+		pure
+		returns (uint256)
 	{
-		if (_assetPrice == 0) {
-			_assetPrice = priceFeed.getExternalPrice(_asset);
-		}
-
-		uint256 MCR = vestaParams.MCR(_asset);
-
-		address currentVaultBorrower = sortedTroves.getLast(_asset);
-		address firstTrove = sortedTroves.getFirst(_asset);
-		bool currentVaultLiquidatable = true;
-
-		while (currentVaultLiquidatable) {
-			uint256 currentICR = troveManager.getCurrentICR(
-				_asset,
-				currentVaultBorrower,
-				_assetPrice
-			);
-
-			if (currentICR < MCR) {
-				result_ += troveManager.getTroveDebt(_asset, currentVaultBorrower);
-
-				if (currentVaultBorrower == firstTrove) return result_;
-				currentVaultBorrower = sortedTroves.getPrev(_asset, currentVaultBorrower);
-			} else {
-				currentVaultLiquidatable = false;
-			}
-		}
-	}
-
-	function computeNominalCR(uint256 _coll, uint256 _debt) external pure returns (uint256) {
-		return VestaMath._computeNominalCR(_coll, _debt);
+		return LiquityMath._computeNominalCR(_coll, _debt);
 	}
 
 	function computeCR(
@@ -261,7 +245,6 @@ contract HintHelpers is VestaBase, CheckContract {
 		uint256 _debt,
 		uint256 _price
 	) external pure returns (uint256) {
-		return VestaMath._computeCR(_coll, _debt, _price);
+		return LiquityMath._computeCR(_coll, _debt, _price);
 	}
 }
-

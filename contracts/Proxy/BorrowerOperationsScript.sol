@@ -14,20 +14,73 @@ contract BorrowerOperationsScript is CheckContract {
 
 	function openTrove(
 		address _asset,
-		uint256 _assetAmountSent,
+		uint256 _amount,
 		uint256 _maxFee,
 		uint256 _VSTAmount,
 		address _upperHint,
 		address _lowerHint
 	) external payable {
-		borrowerOperations.openTrove{ value: getValueOrArg(_asset, _assetAmountSent) }(
+		borrowerOperations.openTrove{ value: getValueOrArg(_asset, _amount) }(
 			_asset,
-			_assetAmountSent,
+			_amount,
 			_maxFee,
 			_VSTAmount,
 			_upperHint,
 			_lowerHint
 		);
+	}
+
+	function addColl(
+		address _asset,
+		uint256 _amount,
+		address _upperHint,
+		address _lowerHint
+	) external payable {
+		borrowerOperations.addColl{ value: getValueOrArg(_asset, _amount) }(
+			_asset,
+			_amount,
+			_upperHint,
+			_lowerHint
+		);
+	}
+
+	function withdrawColl(
+		address _asset,
+		uint256 _amount,
+		address _upperHint,
+		address _lowerHint
+	) external {
+		borrowerOperations.withdrawColl(
+			_asset,
+			_amount,
+			_upperHint,
+			_lowerHint
+		);
+	}
+
+	function withdrawVST(
+		address _asset,
+		uint256 _maxFee,
+		uint256 _amount,
+		address _upperHint,
+		address _lowerHint
+	) external {
+		borrowerOperations.withdrawVST(
+			_asset,
+			_maxFee,
+			_amount,
+			_upperHint,
+			_lowerHint
+		);
+	}
+
+	function repayVST(
+		address _asset,
+		uint256 _amount,
+		address _upperHint,
+		address _lowerHint
+	) external {
+		borrowerOperations.repayVST(_asset, _amount, _upperHint, _lowerHint);
 	}
 
 	function closeTrove(address _asset) external {
@@ -36,7 +89,7 @@ contract BorrowerOperationsScript is CheckContract {
 
 	function adjustTrove(
 		address _asset,
-		uint256 _assetAmountSent,
+		uint256 _amount,
 		uint256 _maxFee,
 		uint256 _collWithdrawal,
 		uint256 _debtChange,
@@ -44,9 +97,11 @@ contract BorrowerOperationsScript is CheckContract {
 		address _upperHint,
 		address _lowerHint
 	) external payable {
-		borrowerOperations.adjustTrove{ value: getValueOrArg(_asset, _assetAmountSent) }(
+		borrowerOperations.adjustTrove{
+			value: getValueOrArg(_asset, _amount)
+		}(
 			_asset,
-			_assetAmountSent,
+			_amount,
 			_maxFee,
 			_collWithdrawal,
 			_debtChange,
@@ -60,7 +115,10 @@ contract BorrowerOperationsScript is CheckContract {
 		borrowerOperations.claimCollateral(_asset);
 	}
 
-	function getValueOrArg(address _asset, uint256 _assetAmountSent) private returns (uint256) {
-		return _asset == address(0) ? msg.value : _assetAmountSent;
+	function getValueOrArg(address _asset, uint256 _amount)
+		private
+		returns (uint256)
+	{
+		return _asset == address(0) ? msg.value : _amount;
 	}
 }

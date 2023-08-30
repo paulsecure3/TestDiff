@@ -1,31 +1,25 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.10;
-
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "../Dependencies/BaseMath.sol";
 import "../Dependencies/CheckContract.sol";
-import "../Dependencies/VestaMath.sol";
+import "../Dependencies/LiquityMath.sol";
 import "../Interfaces/IVSTAStaking.sol";
 import "../Interfaces/IDeposit.sol";
-import "../Dependencies/SafetyTransfer.sol";
 
 contract VSTAStaking is
 	IVSTAStaking,
-	PausableUpgradeable,
-	OwnableUpgradeable,
+	Ownable,
 	CheckContract,
 	BaseMath,
-	ReentrancyGuardUpgradeable
+	ReentrancyGuard
 {
-	using SafeMathUpgradeable for uint256;
-	using SafeERC20Upgradeable for IERC20Upgradeable;
-
-	bool public isInitialized;
+	using SafeMath for uint256;
+	using SafeERC20 for IERC20;
 
 	// --- Data ---
 	string public constant NAME = "VSTAStaking";
@@ -47,45 +41,34 @@ contract VSTAStaking is
 
 	address[] ASSET_TYPE;
 	mapping(address => bool) isAssetTracked;
-	mapping(address => uint256) public sentToTreasuryTracker;
 
-	IERC20Upgradeable public override vstaToken;
-	IERC20Upgradeable public vstToken;
+	IERC20 public override vstaToken;
+	IERC20 public vstToken;
 
 	address public troveManagerAddress;
 	address public borrowerOperationsAddress;
 	address public activePoolAddress;
-	address public treasury;
 
 	// --- Functions ---
+
 	function setAddresses(
 		address _vstaTokenAddress,
 		address _vstTokenAddress,
 		address _troveManagerAddress,
 		address _borrowerOperationsAddress,
-		address _activePoolAddress,
-		address _treasury
-	) external override initializer {
-		require(!isInitialized, "Already Initialized");
-		require(_treasury != address(0), "Invalid Treausry Address");
+		address _activePoolAddress
+	) external override onlyOwner {
 		checkContract(_vstaTokenAddress);
 		checkContract(_vstTokenAddress);
 		checkContract(_troveManagerAddress);
 		checkContract(_borrowerOperationsAddress);
 		checkContract(_activePoolAddress);
-		isInitialized = true;
 
-		__Pausable_init();
-		__ReentrancyGuard_init();
-		__Ownable_init();
-		_pause();
-
-		vstaToken = IERC20Upgradeable(_vstaTokenAddress);
-		vstToken = IERC20Upgradeable(_vstTokenAddress);
+		vstaToken = IERC20(_vstaTokenAddress);
+		vstToken = IERC20(_vstTokenAddress);
 		troveManagerAddress = _troveManagerAddress;
 		borrowerOperationsAddress = _borrowerOperationsAddress;
 		activePoolAddress = _activePoolAddress;
-		treasury = _treasury;
 
 		isAssetTracked[ETH_REF_ADDRESS] = true;
 		ASSET_TYPE.push(ETH_REF_ADDRESS);
@@ -95,10 +78,12 @@ contract VSTAStaking is
 		emit TroveManagerAddressSet(_troveManagerAddress);
 		emit BorrowerOperationsAddressSet(_borrowerOperationsAddress);
 		emit ActivePoolAddressSet(_activePoolAddress);
+
+		renounceOwnership();
 	}
 
 	// If caller has a pre-existing stake, send any accumulated ETH and VST gains to them.
-	function stake(uint256 _VSTAamount) external override nonReentrant whenNotPaused {
+	function stake(uint256 _VSTAamount) external override nonReentrant {
 		require(_VSTAamount > 0);
 
 		uint256 currentStake = stakes[msg.sender];
@@ -169,7 +154,7 @@ contract VSTAStaking is
 		}
 
 		if (_VSTAamount > 0) {
-			uint256 VSTAToWithdraw = VestaMath._min(_VSTAamount, currentStake);
+			uint256 VSTAToWithdraw = LiquityMath._min(_VSTAamount, currentStake);
 
 			uint256 newStake = currentStake.sub(VSTAToWithdraw);
 
@@ -185,31 +170,13 @@ contract VSTAStaking is
 		}
 	}
 
-	function pause() public onlyOwner {
-		_pause();
-	}
-
-	function unpause() public onlyOwner {
-		_unpause();
-	}
-
-	function changeTreasuryAddress(address _treasury) public onlyOwner {
-		treasury = _treasury;
-		emit TreasuryAddressChanged(_treasury);
-	}
-
-	// --- Reward-per-unit-staked increase functions. Called by Vesta core contracts ---
+	// --- Reward-per-unit-staked increase functions. Called by Liquity core contracts ---
 
 	function increaseF_Asset(address _asset, uint256 _AssetFee)
 		external
 		override
 		callerIsTroveManager
 	{
-		if (paused()) {
-			sendToTreasury(_asset, _AssetFee);
-			return;
-		}
-
 		if (!isAssetTracked[_asset]) {
 			isAssetTracked[_asset] = true;
 			ASSET_TYPE.push(_asset);
@@ -218,34 +185,30 @@ contract VSTAStaking is
 		uint256 AssetFeePerVSTAStaked;
 
 		if (totalVSTAStaked > 0) {
-			AssetFeePerVSTAStaked = _AssetFee.mul(DECIMAL_PRECISION).div(totalVSTAStaked);
+			AssetFeePerVSTAStaked = _AssetFee.mul(DECIMAL_PRECISION).div(
+				totalVSTAStaked
+			);
 		}
 
 		F_ASSETS[_asset] = F_ASSETS[_asset].add(AssetFeePerVSTAStaked);
 		emit F_AssetUpdated(_asset, F_ASSETS[_asset]);
 	}
 
-	function increaseF_VST(uint256 _VSTFee) external override callerIsBorrowerOperations {
-		if (paused()) {
-			sendToTreasury(address(vstToken), _VSTFee);
-			return;
-		}
-
+	function increaseF_VST(uint256 _VSTFee)
+		external
+		override
+		callerIsBorrowerOperations
+	{
 		uint256 VSTFeePerVSTAStaked;
 
 		if (totalVSTAStaked > 0) {
-			VSTFeePerVSTAStaked = _VSTFee.mul(DECIMAL_PRECISION).div(totalVSTAStaked);
+			VSTFeePerVSTAStaked = _VSTFee.mul(DECIMAL_PRECISION).div(
+				totalVSTAStaked
+			);
 		}
 
 		F_VST = F_VST.add(VSTFeePerVSTAStaked);
 		emit F_VSTUpdated(F_VST);
-	}
-
-	function sendToTreasury(address _asset, uint256 _amount) internal {
-		_sendAsset(treasury, _asset, _amount);
-		sentToTreasuryTracker[_asset] += _amount;
-
-		emit SentToTreasury(_asset, _amount);
 	}
 
 	// --- Pending reward functions ---
@@ -265,19 +228,30 @@ contract VSTAStaking is
 		returns (uint256)
 	{
 		uint256 F_ASSET_Snapshot = snapshots[_user].F_ASSET_Snapshot[_asset];
-		uint256 AssetGain = stakes[_user].mul(F_ASSETS[_asset].sub(F_ASSET_Snapshot)).div(
-			DECIMAL_PRECISION
-		);
+		uint256 AssetGain = stakes[_user]
+			.mul(F_ASSETS[_asset].sub(F_ASSET_Snapshot))
+			.div(DECIMAL_PRECISION);
 		return AssetGain;
 	}
 
-	function getPendingVSTGain(address _user) external view override returns (uint256) {
+	function getPendingVSTGain(address _user)
+		external
+		view
+		override
+		returns (uint256)
+	{
 		return _getPendingVSTGain(_user);
 	}
 
-	function _getPendingVSTGain(address _user) internal view returns (uint256) {
+	function _getPendingVSTGain(address _user)
+		internal
+		view
+		returns (uint256)
+	{
 		uint256 F_VST_Snapshot = snapshots[_user].F_VST_Snapshot;
-		uint256 VSTGain = stakes[_user].mul(F_VST.sub(F_VST_Snapshot)).div(DECIMAL_PRECISION);
+		uint256 VSTGain = stakes[_user].mul(F_VST.sub(F_VST_Snapshot)).div(
+			DECIMAL_PRECISION
+		);
 		return VSTGain;
 	}
 
@@ -289,45 +263,53 @@ contract VSTAStaking is
 		emit StakerSnapshotsUpdated(_user, F_ASSETS[_asset], F_VST);
 	}
 
-	function _sendAssetGainToUser(address _asset, uint256 _assetGain) internal {
-		_sendAsset(msg.sender, _asset, _assetGain);
-	}
+	function _sendAssetGainToUser(address _asset, uint256 _assetGain)
+		internal
+	{
+		emit AssetSent(_asset, msg.sender, _assetGain);
 
-	function _sendAsset(
-		address _sendTo,
-		address _asset,
-		uint256 _amount
-	) internal {
 		if (_asset == ETH_REF_ADDRESS) {
-			(bool success, ) = _sendTo.call{ value: _amount }("");
-			require(success, "VSTAStaking: Failed to send accumulated AssetGain");
+			(bool success, ) = msg.sender.call{ value: _assetGain }("");
+			require(
+				success,
+				"VSTAStaking: Failed to send accumulated AssetGain"
+			);
 		} else {
-			_amount = SafetyTransfer.decimalsCorrection(_asset, _amount);
-			IERC20Upgradeable(_asset).safeTransfer(_sendTo, _amount);
+			IERC20(_asset).safeTransfer(msg.sender, _assetGain);
 		}
-
-		emit AssetSent(_asset, _sendTo, _amount);
 	}
 
 	// --- 'require' functions ---
 
 	modifier callerIsTroveManager() {
-		require(msg.sender == troveManagerAddress, "VSTAStaking: caller is not TroveM");
+		require(
+			msg.sender == troveManagerAddress,
+			"VSTAStaking: caller is not TroveM"
+		);
 		_;
 	}
 
 	modifier callerIsBorrowerOperations() {
-		require(msg.sender == borrowerOperationsAddress, "VSTAStaking: caller is not BorrowerOps");
+		require(
+			msg.sender == borrowerOperationsAddress,
+			"VSTAStaking: caller is not BorrowerOps"
+		);
 		_;
 	}
 
 	modifier callerIsActivePool() {
-		require(msg.sender == activePoolAddress, "VSTAStaking: caller is not ActivePool");
+		require(
+			msg.sender == activePoolAddress,
+			"VSTAStaking: caller is not ActivePool"
+		);
 		_;
 	}
 
 	function _requireUserHasStake(uint256 currentStake) internal pure {
-		require(currentStake > 0, "VSTAStaking: User must have a non-zero stake");
+		require(
+			currentStake > 0,
+			"VSTAStaking: User must have a non-zero stake"
+		);
 	}
 
 	receive() external payable callerIsActivePool {}

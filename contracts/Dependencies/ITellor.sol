@@ -105,7 +105,9 @@ interface ITellor {
 	 * @param _amount amount the spender is being approved for
 	 * @return true if spender appproved successfully
 	 */
-	function approve(address _spender, uint256 _amount) external returns (bool);
+	function approve(address _spender, uint256 _amount)
+		external
+		returns (bool);
 
 	/**
 	 * @dev Allows for a transfer of tokens to _to
@@ -162,7 +164,10 @@ interface ITellor {
 	 * @dev Getter for the top tipped 5 requests Id's
 	 * @return _requestIds the 5 requestsId
 	 */
-	function getTopRequestIDs() external view returns (uint256[5] memory _requestIds);
+	function getTopRequestIDs()
+		external
+		view
+		returns (uint256[5] memory _requestIds);
 
 	/**
 	 * @dev Getter for the 5 requests Id's next in line to get mined
@@ -191,7 +196,10 @@ interface ITellor {
 	 * @param _spender address
 	 * @return Returns the remaining allowance of tokens granted to the _spender from the _user
 	 */
-	function allowance(address _user, address _spender) external view returns (uint256);
+	function allowance(address _user, address _spender)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev This function returns whether or not a given user is allowed to trade a given amount
@@ -199,7 +207,10 @@ interface ITellor {
 	 * @param _amount uint of amount
 	 * @return true if the user is alloed to trade the amount specified
 	 */
-	function allowedToTrade(address _user, uint256 _amount) external view returns (bool);
+	function allowedToTrade(address _user, uint256 _amount)
+		external
+		view
+		returns (bool);
 
 	/**
 	 * @dev Gets balance of owner specified
@@ -214,7 +225,10 @@ interface ITellor {
 	 * @param _blockNumber The block number when the balance is queried
 	 * @return The balance at _blockNumber
 	 */
-	function balanceOfAt(address _user, uint256 _blockNumber) external view returns (uint256);
+	function balanceOfAt(address _user, uint256 _blockNumber)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev This function tells you if a given challenge has been completed by a given miner
@@ -222,7 +236,10 @@ interface ITellor {
 	 * @param _miner address that you want to know if they solved the challenge
 	 * @return true if the _miner address provided solved the
 	 */
-	function didMine(bytes32 _challenge, address _miner) external view returns (bool);
+	function didMine(bytes32 _challenge, address _miner)
+		external
+		view
+		returns (bool);
 
 	/**
 	 * @dev Checks if an address voted in a given dispute
@@ -230,7 +247,10 @@ interface ITellor {
 	 * @param _address to look up
 	 * @return bool of whether or not party voted
 	 */
-	function didVote(uint256 _disputeId, address _address) external view returns (bool);
+	function didVote(uint256 _disputeId, address _address)
+		external
+		view
+		returns (bool);
 
 	/**
 	 * @dev allows Tellor to read data from the addressVars mapping
@@ -299,7 +319,10 @@ interface ITellor {
 	 * @param _hash is the sha256(abi.encodePacked(_miners[2],_requestId));
 	 * @return uint disputeId
 	 */
-	function getDisputeIdByDisputeHash(bytes32 _hash) external view returns (uint256);
+	function getDisputeIdByDisputeHash(bytes32 _hash)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev Checks for uint variables in the disputeUintVars mapping based on the disuputeId
@@ -326,7 +349,10 @@ interface ITellor {
 	 * @param _requestId being requested
 	 * @return value for timestamp of last proof of work submited and if true if it exist or 0 and false if it doesn't
 	 */
-	function getLastNewValueById(uint256 _requestId) external view returns (uint256, bool);
+	function getLastNewValueById(uint256 _requestId)
+		external
+		view
+		returns (uint256, bool);
 
 	/**
 	 * @dev Gets blocknumber for mined timestamp
@@ -345,10 +371,10 @@ interface ITellor {
 	 * @param _timestamp is the timestamp to look up miners for
 	 * @return the 5 miners' addresses
 	 */
-	function getMinersByRequestIdAndTimestamp(uint256 _requestId, uint256 _timestamp)
-		external
-		view
-		returns (address[5] memory);
+	function getMinersByRequestIdAndTimestamp(
+		uint256 _requestId,
+		uint256 _timestamp
+	) external view returns (address[5] memory);
 
 	/**
 	 * @dev Counts the number of values that have been submited for the request
@@ -357,28 +383,40 @@ interface ITellor {
 	 * @param _requestId the requestId to look up
 	 * @return uint count of the number of values received for the requestId
 	 */
-	function getNewValueCountbyRequestId(uint256 _requestId) external view returns (uint256);
+	function getNewValueCountbyRequestId(uint256 _requestId)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev Getter function for the specified requestQ index
 	 * @param _index to look up in the requestQ array
 	 * @return uint of reqeuestId
 	 */
-	function getRequestIdByRequestQIndex(uint256 _index) external view returns (uint256);
+	function getRequestIdByRequestQIndex(uint256 _index)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev Getter function for requestId based on timestamp
 	 * @param _timestamp to check requestId
 	 * @return uint of reqeuestId
 	 */
-	function getRequestIdByTimestamp(uint256 _timestamp) external view returns (uint256);
+	function getRequestIdByTimestamp(uint256 _timestamp)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev Getter function for requestId based on the queryHash
 	 * @param _request is the hash(of string api and granularity) to check if a request already exists
 	 * @return uint requestId
 	 */
-	function getRequestIdByQueryHash(bytes32 _request) external view returns (uint256);
+	function getRequestIdByQueryHash(bytes32 _request)
+		external
+		view
+		returns (uint256);
 
 	/**
 	 * @dev Getter function for the requestQ array
@@ -428,7 +466,10 @@ interface ITellor {
 	 * @return uint current state of staker
 	 * @return uint startDate of staking
 	 */
-	function getStakerInfo(address _staker) external view returns (uint256, uint256);
+	function getStakerInfo(address _staker)
+		external
+		view
+		returns (uint256, uint256);
 
 	/**
 	 * @dev Gets the 5 miners who mined the value for the specified requestId/_timestamp
@@ -436,10 +477,10 @@ interface ITellor {
 	 * @param _timestamp is the timestampt to look up miners for
 	 * @return address[5] array of 5 addresses ofminers that mined the requestId
 	 */
-	function getSubmissionsByTimestamp(uint256 _requestId, uint256 _timestamp)
-		external
-		view
-		returns (uint256[5] memory);
+	function getSubmissionsByTimestamp(
+		uint256 _requestId,
+		uint256 _timestamp
+	) external view returns (uint256[5] memory);
 
 	/**
 	 * @dev Gets the timestamp for the value based on their index
@@ -447,10 +488,10 @@ interface ITellor {
 	 * @param _index is the value index to look up
 	 * @return uint timestamp
 	 */
-	function getTimestampbyRequestIDandIndex(uint256 _requestID, uint256 _index)
-		external
-		view
-		returns (uint256);
+	function getTimestampbyRequestIDandIndex(
+		uint256 _requestID,
+		uint256 _index
+	) external view returns (uint256);
 
 	/**
 	 * @dev Getter for the variables saved under the TellorStorageStruct uintVars variable
@@ -482,7 +523,10 @@ interface ITellor {
 	 * @param _timestamp is the timestamp to look up miners for
 	 * @return bool true if requestId/timestamp is under dispute
 	 */
-	function isInDispute(uint256 _requestId, uint256 _timestamp) external view returns (bool);
+	function isInDispute(uint256 _requestId, uint256 _timestamp)
+		external
+		view
+		returns (bool);
 
 	/**
 	 * @dev Retreive value from oracle based on timestamp

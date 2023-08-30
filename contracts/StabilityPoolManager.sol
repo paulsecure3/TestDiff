@@ -1,59 +1,59 @@
 pragma solidity ^0.8.10;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./Dependencies/CheckContract.sol";
 import "./Interfaces/IStabilityPoolManager.sol";
 
-contract StabilityPoolManager is OwnableUpgradeable, CheckContract, IStabilityPoolManager {
+contract StabilityPoolManager is
+	Ownable,
+	CheckContract,
+	IStabilityPoolManager
+{
 	mapping(address => address) stabilityPools;
 	mapping(address => bool) validStabilityPools;
 
 	string public constant NAME = "StabilityPoolManager";
 
-	bool public isInitialized;
-	address public adminContract;
+	bool public isInitialized = false;
 
-	modifier isController() {
-		require(msg.sender == owner() || msg.sender == adminContract, "Invalid permissions");
-		_;
-	}
-
-	function setAddresses(address _adminContract) external initializer {
-		require(!isInitialized, "Already initialized");
-		checkContract(_adminContract);
-		isInitialized = true;
-
-		__Ownable_init();
-
-		adminContract = _adminContract;
-	}
-
-	function setAdminContract(address _admin) external onlyOwner {
-		require(_admin != address(0), "Admin cannot be empty address");
-		adminContract = _admin;
-	}
-
-	function isStabilityPool(address stabilityPool) external view override returns (bool) {
+	function isStabilityPool(address stabilityPool)
+		external
+		view
+		override
+		returns (bool)
+	{
 		return validStabilityPools[stabilityPool];
+	}
+
+	function setAddresses(
+		address stabilityPoolETH,
+		address stabilityPoolBTC,
+		address btcAddress
+	) public onlyOwner {
+		require(!isInitialized);
+		checkContract(stabilityPoolETH);
+		checkContract(stabilityPoolBTC);
+
+		stabilityPools[address(0)] = stabilityPoolETH;
+		validStabilityPools[stabilityPoolETH] = true;
+
+		stabilityPools[btcAddress] = stabilityPoolBTC;
+		validStabilityPools[stabilityPoolBTC] = true;
+
+		isInitialized = true;
 	}
 
 	function addStabilityPool(address asset, address stabilityPool)
 		external
 		override
-		isController
+		onlyOwner
 	{
 		CheckContract(asset);
 		CheckContract(stabilityPool);
-		require(!validStabilityPools[stabilityPool], "StabilityPool already created.");
 
 		stabilityPools[asset] = stabilityPool;
 		validStabilityPools[stabilityPool] = true;
-	}
-
-	function removeStabilityPool(address asset) external isController {
-		delete validStabilityPools[stabilityPools[asset]];
-		delete stabilityPools[asset];
 	}
 
 	function getAssetStabilityPool(address asset)
@@ -62,17 +62,10 @@ contract StabilityPoolManager is OwnableUpgradeable, CheckContract, IStabilityPo
 		override
 		returns (IStabilityPool)
 	{
-		require(stabilityPools[asset] != address(0), "Invalid asset StabilityPool");
+		require(
+			address(stabilityPools[asset]) != address(0),
+			"Invalid asset StabilityPool"
+		);
 		return IStabilityPool(stabilityPools[asset]);
 	}
-
-	function unsafeGetAssetStabilityPool(address _asset)
-		external
-		view
-		override
-		returns (address)
-	{
-		return stabilityPools[_asset];
-	}
 }
-

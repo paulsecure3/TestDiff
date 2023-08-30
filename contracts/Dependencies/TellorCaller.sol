@@ -3,12 +3,12 @@
 pragma solidity ^0.8.10;
 import "../Interfaces/ITellorCaller.sol";
 import "./ITellor.sol";
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /*
  * This contract has a single external function that calls Tellor: getTellorCurrentValue().
  *
- * The function is called by the Vesta contract PriceFeed.sol. If any of its inner calls to Tellor revert,
+ * The function is called by the Liquity contract PriceFeed.sol. If any of its inner calls to Tellor revert,
  * this function will revert, and PriceFeed will catch the failure and handle it accordingly.
  *
  * The function comes from Tellor's own wrapper contract, 'UsingTellor.sol':
@@ -16,7 +16,7 @@ import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
  *
  */
 contract TellorCaller is ITellorCaller {
-	using SafeMathUpgradeable for uint256;
+	using SafeMath for uint256;
 
 	ITellor public tellor;
 
@@ -44,7 +44,10 @@ contract TellorCaller is ITellorCaller {
 		)
 	{
 		uint256 _count = tellor.getNewValueCountbyRequestId(_requestId);
-		uint256 _time = tellor.getTimestampbyRequestIDandIndex(_requestId, _count.sub(1));
+		uint256 _time = tellor.getTimestampbyRequestIDandIndex(
+			_requestId,
+			_count.sub(1)
+		);
 		uint256 _value = tellor.retrieveData(_requestId, _time);
 		if (_value > 0) return (true, _value, _time);
 		return (false, 0, _time);

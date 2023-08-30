@@ -4,17 +4,53 @@ pragma solidity ^0.8.10;
 
 import "./IDeposit.sol";
 
+/*
+ * The Stability Pool holds VST tokens deposited by Stability Pool depositors.
+ *
+ * When a trove is liquidated, then depending on system conditions, some of its VST debt gets offset with
+ * VST in the Stability Pool:  that is, the offset debt evaporates, and an equal amount of VST tokens in the Stability Pool is burned.
+ *
+ * Thus, a liquidation causes each depositor to receive a VST loss, in proportion to their deposit as a share of total deposits.
+ * They also receive an ETH gain, as the ETH collateral of the liquidated trove is distributed among Stability depositors,
+ * in the same proportion.
+ *
+ * When a liquidation occurs, it depletes every deposit by the same fraction: for example, a liquidation that depletes 40%
+ * of the total VST in the Stability Pool, depletes 40% of each deposit.
+ *
+ * A deposit that has experienced a series of liquidations is termed a "compounded deposit": each liquidation depletes the deposit,
+ * multiplying it by some factor in range ]0,1[
+ *
+ * Please see the implementation spec in the proof document, which closely follows on from the compounded deposit / ETH gain derivations:
+ * https://github.com/liquity/liquity/blob/master/papers/Scalable_Reward_Distribution_with_Compounding_Stakes.pdf
+ *
+ * --- VSTA ISSUANCE TO STABILITY POOL DEPOSITORS ---
+ *
+ * An VSTA issuance event occurs at every deposit operation, and every liquidation.
+ *
+ * Each deposit is tagged with the address of the front end through which it was made.
+ *
+ * All deposits earn a share of the issued VSTA in proportion to the deposit as a share of total deposits. The VSTA earned
+ * by a given deposit, is split between the depositor and the front end through which the deposit was made, based on the front end's kickbackRate.
+ *
+ * Please see the system Readme for an overview:
+ * https://github.com/liquity/dev/blob/main/README.md#VSTA-issuance-to-stability-providers
+ */
 interface IStabilityPool is IDeposit {
 	// --- Events ---
+
 	event StabilityPoolAssetBalanceUpdated(uint256 _newBalance);
 	event StabilityPoolVSTBalanceUpdated(uint256 _newBalance);
 
-	event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
+	event BorrowerOperationsAddressChanged(
+		address _newBorrowerOperationsAddress
+	);
 	event TroveManagerAddressChanged(address _newTroveManagerAddress);
 	event DefaultPoolAddressChanged(address _newDefaultPoolAddress);
 	event VSTTokenAddressChanged(address _newVSTTokenAddress);
 	event SortedTrovesAddressChanged(address _newSortedTrovesAddress);
-	event CommunityIssuanceAddressChanged(address _newCommunityIssuanceAddress);
+	event CommunityIssuanceAddressChanged(
+		address _newCommunityIssuanceAddress
+	);
 
 	event P_Updated(uint256 _P);
 	event S_Updated(uint256 _S, uint128 _epoch, uint128 _scale);
@@ -22,19 +58,31 @@ interface IStabilityPool is IDeposit {
 	event EpochUpdated(uint128 _currentEpoch);
 	event ScaleUpdated(uint128 _currentScale);
 
-	event DepositSnapshotUpdated(address indexed _depositor, uint256 _P, uint256 _S, uint256 _G);
+	event DepositSnapshotUpdated(
+		address indexed _depositor,
+		uint256 _P,
+		uint256 _S,
+		uint256 _G
+	);
 	event SystemSnapshotUpdated(uint256 _P, uint256 _G);
-	event UserDepositChanged(address indexed _depositor, uint256 _newDeposit);
+	event UserDepositChanged(
+		address indexed _depositor,
+		uint256 _newDeposit
+	);
 	event StakeChanged(uint256 _newSystemStake, address _depositor);
 
-	event AssetGainWithdrawn(address indexed _depositor, uint256 _Asset, uint256 _VSTLoss);
+	event AssetGainWithdrawn(
+		address indexed _depositor,
+		uint256 _Asset,
+		uint256 _VSTLoss
+	);
 	event VSTAPaidToDepositor(address indexed _depositor, uint256 _VSTA);
 	event AssetSent(address _to, uint256 _amount);
 
 	// --- Functions ---
 
 	/*
-	 * Called only once on init, to set addresses of other Vesta contracts
+	 * Called only once on init, to set addresses of other Liquity contracts
 	 * Callable only by owner, renounces ownership at the end
 	 */
 	function setAddresses(
@@ -89,7 +137,8 @@ interface IStabilityPool is IDeposit {
 	 * - Leaves their compounded deposit in the Stability Pool
 	 * - Updates snapshots for deposit and tagged front end stake
 	 */
-	function withdrawAssetGainToTrove(address _upperHint, address _lowerHint) external;
+	function withdrawAssetGainToTrove(address _upperHint, address _lowerHint)
+		external;
 
 	/*
 	 * Initial checks:
@@ -115,7 +164,10 @@ interface IStabilityPool is IDeposit {
 	/*
 	 * Calculates the ETH gain earned by the deposit since its last snapshots were taken.
 	 */
-	function getDepositorAssetGain(address _depositor) external view returns (uint256);
+	function getDepositorAssetGain(address _depositor)
+		external
+		view
+		returns (uint256);
 
 	/*
 	 * Calculate the VSTA gain earned by a deposit since its last snapshots were taken.
@@ -123,12 +175,18 @@ interface IStabilityPool is IDeposit {
 	 * Otherwise, their cut of the deposit's earnings is equal to the kickbackRate, set by the front end through
 	 * which they made their deposit.
 	 */
-	function getDepositorVSTAGain(address _depositor) external view returns (uint256);
+	function getDepositorVSTAGain(address _depositor)
+		external
+		view
+		returns (uint256);
 
 	/*
 	 * Return the user's compounded deposit.
 	 */
-	function getCompoundedVSTDeposit(address _depositor) external view returns (uint256);
+	function getCompoundedVSTDeposit(address _depositor)
+		external
+		view
+		returns (uint256);
 
 	/*
 	 * Return the front end's compounded stake.
@@ -136,10 +194,6 @@ interface IStabilityPool is IDeposit {
 	 * The front end's compounded stake is equal to the sum of its depositors' compounded deposits.
 	 */
 	function getCompoundedTotalStake() external view returns (uint256);
-
-	function getNameBytes() external view returns (bytes32);
-
-	function getAssetType() external view returns (address);
 
 	/*
 	 * Fallback function

@@ -2,17 +2,16 @@
 
 pragma solidity ^0.8.10;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./Interfaces/ICollSurplusPool.sol";
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Dependencies/CheckContract.sol";
-import "./Dependencies/SafetyTransfer.sol";
 
-contract CollSurplusPool is OwnableUpgradeable, CheckContract, ICollSurplusPool {
-	using SafeMathUpgradeable for uint256;
-	using SafeERC20Upgradeable for IERC20Upgradeable;
+contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
+	using SafeMath for uint256;
+	using SafeERC20 for IERC20;
 
 	string public constant NAME = "CollSurplusPool";
 	address constant ETH_REF_ADDRESS = address(0);
@@ -20,8 +19,6 @@ contract CollSurplusPool is OwnableUpgradeable, CheckContract, ICollSurplusPool 
 	address public borrowerOperationsAddress;
 	address public troveManagerAddress;
 	address public activePoolAddress;
-
-	bool public isInitialized;
 
 	// deposited ether tracker
 	mapping(address => uint256) balances;
@@ -34,14 +31,10 @@ contract CollSurplusPool is OwnableUpgradeable, CheckContract, ICollSurplusPool 
 		address _borrowerOperationsAddress,
 		address _troveManagerAddress,
 		address _activePoolAddress
-	) external override initializer {
-		require(!isInitialized, "Already initialized");
+	) external override onlyOwner {
 		checkContract(_borrowerOperationsAddress);
 		checkContract(_troveManagerAddress);
 		checkContract(_activePoolAddress);
-		isInitialized = true;
-
-		__Ownable_init();
 
 		borrowerOperationsAddress = _borrowerOperationsAddress;
 		troveManagerAddress = _troveManagerAddress;
@@ -56,7 +49,12 @@ contract CollSurplusPool is OwnableUpgradeable, CheckContract, ICollSurplusPool 
 
 	/* Returns the Asset state variable at ActivePool address.
        Not necessarily equal to the raw ether balance - ether can be forcibly sent to contracts. */
-	function getAssetBalance(address _asset) external view override returns (uint256) {
+	function getAssetBalance(address _asset)
+		external
+		view
+		override
+		returns (uint256)
+	{
 		return balances[_asset];
 	}
 
@@ -86,33 +84,30 @@ contract CollSurplusPool is OwnableUpgradeable, CheckContract, ICollSurplusPool 
 
 	function claimColl(address _asset, address _account) external override {
 		_requireCallerIsBorrowerOperations();
-		uint256 claimableCollEther = userBalances[_account][_asset];
-
-		uint256 safetyTransferclaimableColl = SafetyTransfer.decimalsCorrection(
-			_asset,
-			userBalances[_account][_asset]
-		);
-
+		uint256 claimableColl = userBalances[_account][_asset];
 		require(
-			safetyTransferclaimableColl > 0,
+			claimableColl > 0,
 			"CollSurplusPool: No collateral available to claim"
 		);
 
 		userBalances[_account][_asset] = 0;
 		emit CollBalanceUpdated(_account, 0);
 
-		balances[_asset] = balances[_asset].sub(claimableCollEther);
-		emit AssetSent(_account, safetyTransferclaimableColl);
+		balances[_asset] = balances[_asset].sub(claimableColl);
+		emit EtherSent(_account, claimableColl);
 
 		if (_asset == ETH_REF_ADDRESS) {
-			(bool success, ) = _account.call{ value: claimableCollEther }("");
+			(bool success, ) = _account.call{ value: claimableColl }("");
 			require(success, "CollSurplusPool: sending ETH failed");
 		} else {
-			IERC20Upgradeable(_asset).safeTransfer(_account, safetyTransferclaimableColl);
+			IERC20(_asset).safeTransfer(_account, claimableColl);
 		}
 	}
 
-	function receivedERC20(address _asset, uint256 _amount) external override {
+	function receivedERC20(address _asset, uint256 _amount)
+		external
+		override
+	{
 		_requireCallerIsActivePool();
 		balances[_asset] = balances[_asset].add(_amount);
 	}
@@ -127,11 +122,17 @@ contract CollSurplusPool is OwnableUpgradeable, CheckContract, ICollSurplusPool 
 	}
 
 	function _requireCallerIsTroveManager() internal view {
-		require(msg.sender == troveManagerAddress, "CollSurplusPool: Caller is not TroveManager");
+		require(
+			msg.sender == troveManagerAddress,
+			"CollSurplusPool: Caller is not TroveManager"
+		);
 	}
 
 	function _requireCallerIsActivePool() internal view {
-		require(msg.sender == activePoolAddress, "CollSurplusPool: Caller is not Active Pool");
+		require(
+			msg.sender == activePoolAddress,
+			"CollSurplusPool: Caller is not Active Pool"
+		);
 	}
 
 	// --- Fallback function ---

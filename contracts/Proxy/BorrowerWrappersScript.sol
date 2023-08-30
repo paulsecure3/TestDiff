@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.10;
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
-import "../Dependencies/VestaMath.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "../Dependencies/LiquityMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../Interfaces/IBorrowerOperations.sol";
 import "../Interfaces/ITroveManager.sol";
@@ -18,7 +18,7 @@ contract BorrowerWrappersScript is
 	ETHTransferScript,
 	VSTAStakingScript
 {
-	using SafeMathUpgradeable for uint256;
+	using SafeMath for uint256;
 
 	struct Local_var {
 		address _asset;
@@ -41,18 +41,23 @@ contract BorrowerWrappersScript is
 		address _troveManagerAddress,
 		address _VSTAStakingAddress
 	)
-		BorrowerOperationsScript(IBorrowerOperations(_borrowerOperationsAddress))
+		BorrowerOperationsScript(
+			IBorrowerOperations(_borrowerOperationsAddress)
+		)
 		VSTAStakingScript(_VSTAStakingAddress)
 	{
 		checkContract(_troveManagerAddress);
 		ITroveManager troveManagerCached = ITroveManager(_troveManagerAddress);
 		troveManager = troveManagerCached;
 
-		IStabilityPoolManager stabilityPoolCached = troveManagerCached.stabilityPoolManager();
+		IStabilityPoolManager stabilityPoolCached = troveManagerCached
+			.stabilityPoolManager();
 		checkContract(address(stabilityPoolCached));
 		stabilityPoolManager = stabilityPoolCached;
 
-		IPriceFeed priceFeedCached = troveManagerCached.vestaParams().priceFeed();
+		IPriceFeed priceFeedCached = troveManagerCached
+			.vestaParams()
+			.priceFeed();
 		checkContract(address(priceFeedCached));
 		priceFeed = priceFeedCached;
 
@@ -60,7 +65,9 @@ contract BorrowerWrappersScript is
 		checkContract(vstTokenCached);
 		vstToken = IERC20(vstTokenCached);
 
-		address vstaTokenCached = address(IVSTAStaking(_VSTAStakingAddress).vstaToken());
+		address vstaTokenCached = address(
+			IVSTAStaking(_VSTAStakingAddress).vstaToken()
+		);
 		checkContract(vstaTokenCached);
 		vstaToken = IERC20(vstaTokenCached);
 
@@ -88,10 +95,14 @@ contract BorrowerWrappersScript is
 		// already checked in CollSurplusPool
 		assert(balanceAfter > balanceBefore);
 
-		uint256 totalCollateral = balanceAfter.sub(balanceBefore).add(msg.value);
+		uint256 totalCollateral = balanceAfter.sub(balanceBefore).add(
+			msg.value
+		);
 
 		// Open trove with obtained collateral, plus collateral sent by user
-		borrowerOperations.openTrove{ value: _asset == address(0) ? totalCollateral : 0 }(
+		borrowerOperations.openTrove{
+			value: _asset == address(0) ? totalCollateral : 0
+		}(
 			_asset,
 			totalCollateral,
 			_maxFee,
@@ -107,12 +118,20 @@ contract BorrowerWrappersScript is
 		address _upperHint,
 		address _lowerHint
 	) external {
-		Local_var memory vars = Local_var(_asset, _maxFee, _upperHint, _lowerHint, 0);
+		Local_var memory vars = Local_var(
+			_asset,
+			_maxFee,
+			_upperHint,
+			_lowerHint,
+			0
+		);
 		uint256 collBalanceBefore = address(this).balance;
 		uint256 VSTABalanceBefore = vstaToken.balanceOf(address(this));
 
 		// Claim rewards
-		stabilityPoolManager.getAssetStabilityPool(vars._asset).withdrawFromSP(0);
+		stabilityPoolManager.getAssetStabilityPool(vars._asset).withdrawFromSP(
+				0
+			);
 
 		uint256 collBalanceAfter = address(this).balance;
 		uint256 VSTABalanceAfter = vstaToken.balanceOf(address(this));
@@ -136,7 +155,9 @@ contract BorrowerWrappersScript is
 			);
 			// Provide withdrawn VST to Stability Pool
 			if (vars.netVSTAmount > 0) {
-				stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(vars.netVSTAmount);
+				stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(
+					vars.netVSTAmount
+				);
 			}
 		}
 
@@ -153,7 +174,13 @@ contract BorrowerWrappersScript is
 		address _upperHint,
 		address _lowerHint
 	) external {
-		Local_var memory vars = Local_var(_asset, _maxFee, _upperHint, _lowerHint, 0);
+		Local_var memory vars = Local_var(
+			_asset,
+			_maxFee,
+			_upperHint,
+			_lowerHint,
+			0
+		);
 
 		uint256 collBalanceBefore = address(this).balance;
 		uint256 VSTBalanceBefore = vstToken.balanceOf(address(this));
@@ -162,8 +189,12 @@ contract BorrowerWrappersScript is
 		// Claim gains
 		vstaStaking.unstake(0);
 
-		uint256 gainedCollateral = address(this).balance.sub(collBalanceBefore); // stack too deep issues :'(
-		uint256 gainedVST = vstToken.balanceOf(address(this)).sub(VSTBalanceBefore);
+		uint256 gainedCollateral = address(this).balance.sub(
+			collBalanceBefore
+		); // stack too deep issues :'(
+		uint256 gainedVST = vstToken.balanceOf(address(this)).sub(
+			VSTBalanceBefore
+		);
 
 		// Top up trove and get more VST, keeping ICR constant
 		if (gainedCollateral > 0) {
@@ -185,7 +216,9 @@ contract BorrowerWrappersScript is
 
 		uint256 totalVST = gainedVST.add(vars.netVSTAmount);
 		if (totalVST > 0) {
-			stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(totalVST);
+			stabilityPoolManager.getAssetStabilityPool(_asset).provideToSP(
+				totalVST
+			);
 
 			// Providing to Stability Pool also triggers VSTA claim, so stake it if any
 			uint256 VSTABalanceAfter = vstaToken.balanceOf(address(this));
@@ -196,20 +229,26 @@ contract BorrowerWrappersScript is
 		}
 	}
 
-	function _getNetVSTAmount(address _asset, uint256 _collateral) internal returns (uint256) {
+	function _getNetVSTAmount(address _asset, uint256 _collateral)
+		internal
+		returns (uint256)
+	{
 		uint256 price = priceFeed.fetchPrice(_asset);
 		uint256 ICR = troveManager.getCurrentICR(_asset, address(this), price);
 
 		uint256 VSTAmount = _collateral.mul(price).div(ICR);
 		uint256 borrowingRate = troveManager.getBorrowingRateWithDecay(_asset);
-		uint256 netDebt = VSTAmount.mul(VestaMath.DECIMAL_PRECISION).div(
-			VestaMath.DECIMAL_PRECISION.add(borrowingRate)
+		uint256 netDebt = VSTAmount.mul(LiquityMath.DECIMAL_PRECISION).div(
+			LiquityMath.DECIMAL_PRECISION.add(borrowingRate)
 		);
 
 		return netDebt;
 	}
 
-	function _requireUserHasTrove(address _asset, address _depositor) internal view {
+	function _requireUserHasTrove(address _asset, address _depositor)
+		internal
+		view
+	{
 		require(
 			troveManager.getTroveStatus(_asset, _depositor) == 1,
 			"BorrowerWrappersScript: caller must have an active trove"

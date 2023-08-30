@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.10;
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./Interfaces/IDefaultPool.sol";
-import "./Interfaces/IActivePool.sol";
 import "./Dependencies/CheckContract.sol";
-import "./Dependencies/SafetyTransfer.sol";
 
 /*
  * The Default Pool holds the ETH and VST debt (but not VST tokens) from liquidations that have been redistributed
@@ -17,9 +15,9 @@ import "./Dependencies/SafetyTransfer.sol";
  * When a trove makes an operation that applies its pending ETH and VST debt, its pending ETH and VST debt is moved
  * from the Default Pool to the Active Pool.
  */
-contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
-	using SafeMathUpgradeable for uint256;
-	using SafeERC20Upgradeable for IERC20Upgradeable;
+contract DefaultPool is Ownable, CheckContract, IDefaultPool {
+	using SafeMath for uint256;
+	using SafeERC20 for IERC20;
 
 	string public constant NAME = "DefaultPool";
 
@@ -27,24 +25,17 @@ contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
 
 	address public troveManagerAddress;
 	address public activePoolAddress;
-
-	bool public isInitialized;
-
 	mapping(address => uint256) internal assetsBalance;
 	mapping(address => uint256) internal VSTDebts; // debt
 
 	// --- Dependency setters ---
 
-	function setAddresses(address _troveManagerAddress, address _activePoolAddress)
-		external
-		initializer
-	{
-		require(!isInitialized, "Already initialized");
+	function setAddresses(
+		address _troveManagerAddress,
+		address _activePoolAddress
+	) external onlyOwner {
 		checkContract(_troveManagerAddress);
 		checkContract(_activePoolAddress);
-		isInitialized = true;
-
-		__Ownable_init();
 
 		troveManagerAddress = _troveManagerAddress;
 		activePoolAddress = _activePoolAddress;
@@ -62,11 +53,21 @@ contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
 	 *
 	 * Not necessarily equal to the the contract's raw ETH balance - ether can be forcibly sent to contracts.
 	 */
-	function getAssetBalance(address _asset) external view override returns (uint256) {
+	function getAssetBalance(address _asset)
+		external
+		view
+		override
+		returns (uint256)
+	{
 		return assetsBalance[_asset];
 	}
 
-	function getVSTDebt(address _asset) external view override returns (uint256) {
+	function getVSTDebt(address _asset)
+		external
+		view
+		override
+		returns (uint256)
+	{
 		return VSTDebts[_asset];
 	}
 
@@ -78,14 +79,10 @@ contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
 		callerIsTroveManager
 	{
 		address activePool = activePoolAddress; // cache to save an SLOAD
-
-		uint256 safetyTransferAmount = SafetyTransfer.decimalsCorrection(_asset, _amount);
-		if (safetyTransferAmount == 0) return;
-
 		assetsBalance[_asset] = assetsBalance[_asset].sub(_amount);
 
 		if (_asset != ETH_REF_ADDRESS) {
-			IERC20Upgradeable(_asset).safeTransfer(activePool, safetyTransferAmount);
+			IERC20(_asset).safeTransfer(activePool, _amount);
 			IDeposit(activePool).receivedERC20(_asset, _amount);
 		} else {
 			(bool success, ) = activePool.call{ value: _amount }("");
@@ -93,7 +90,7 @@ contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
 		}
 
 		emit DefaultPoolAssetBalanceUpdated(_asset, assetsBalance[_asset]);
-		emit AssetSent(activePool, _asset, safetyTransferAmount);
+		emit AssetSent(activePool, _asset, _amount);
 	}
 
 	function increaseVSTDebt(address _asset, uint256 _amount)
@@ -117,12 +114,18 @@ contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
 	// --- 'require' functions ---
 
 	modifier callerIsActivePool() {
-		require(msg.sender == activePoolAddress, "DefaultPool: Caller is not the ActivePool");
+		require(
+			msg.sender == activePoolAddress,
+			"DefaultPool: Caller is not the ActivePool"
+		);
 		_;
 	}
 
 	modifier callerIsTroveManager() {
-		require(msg.sender == troveManagerAddress, "DefaultPool: Caller is not the TroveManager");
+		require(
+			msg.sender == troveManagerAddress,
+			"DefaultPool: Caller is not the TroveManager"
+		);
 		_;
 	}
 
@@ -131,16 +134,22 @@ contract DefaultPool is OwnableUpgradeable, CheckContract, IDefaultPool {
 		override
 		callerIsActivePool
 	{
-		require(_asset != ETH_REF_ADDRESS, "ETH Cannot use this functions");
-
 		assetsBalance[_asset] = assetsBalance[_asset].add(_amount);
-		emit DefaultPoolAssetBalanceUpdated(_asset, assetsBalance[_asset]);
+		emit DefaultPoolAssetBalanceUpdated(
+			_asset,
+			assetsBalance[ETH_REF_ADDRESS]
+		);
 	}
 
 	// --- Fallback function ---
 
 	receive() external payable callerIsActivePool {
-		assetsBalance[ETH_REF_ADDRESS] = assetsBalance[ETH_REF_ADDRESS].add(msg.value);
-		emit DefaultPoolAssetBalanceUpdated(ETH_REF_ADDRESS, assetsBalance[ETH_REF_ADDRESS]);
+		assetsBalance[ETH_REF_ADDRESS] = assetsBalance[ETH_REF_ADDRESS].add(
+			msg.value
+		);
+		emit DefaultPoolAssetBalanceUpdated(
+			ETH_REF_ADDRESS,
+			assetsBalance[ETH_REF_ADDRESS]
+		);
 	}
 }
